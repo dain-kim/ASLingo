@@ -1,2 +1,5 @@
 opencv-python
 mediapipe
+pandas
+requests
+requests-html

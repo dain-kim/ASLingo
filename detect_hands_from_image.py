@@ -1,3 +1,4 @@
+# base code source: https://google.github.io/mediapipe/solutions/hands.html#python-solution-api
 import cv2
 import sys
 import mediapipe as mp
