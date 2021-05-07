@@ -7,15 +7,15 @@ import mediapipe as mp
 from requests_html import HTMLSession
 from SignBankRefIDs import SB_REF_IDS
 
-BASE_URL = "https://aslsignbank.haskins.yale.edu"
-VIDEO_URL = BASE_URL + "/dictionary/protected_media/glossvideo/ASL/"
-AJAX_URL = BASE_URL + "/dictionary/ajax/glossrow/"
-session = HTMLSession()
-
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 mp_pose = mp.solutions.pose
 hands = mp_hands.Hands(
+    max_num_hands=2,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5)
+one_hand = mp_hands.Hands(
+    max_num_hands=1,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5)
 pose = mp_pose.Pose(
@@ -23,6 +23,12 @@ pose = mp_pose.Pose(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5)
 
+BASE_URL = "https://aslsignbank.haskins.yale.edu"
+VIDEO_URL = BASE_URL + "/dictionary/protected_media/glossvideo/ASL/"
+AJAX_URL = BASE_URL + "/dictionary/ajax/glossrow/"
+session = HTMLSession()
+
+# deprecated
 def request_video_info(ref_id):
     '''
     Returns:
@@ -43,13 +49,30 @@ def request_video_info(ref_id):
     except:
         print('Could not find video at {}'.format(AJAX_URL+str(ref_id)))
 
-def process_video(video_path, show=True):
+def get_mediapipe_results(image, num_hands=2):
+    # Flip image around y-axis for correct handedness output.
+    image = cv2.flip(image, 1)
+    # Convert the BGR image to RGB.
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # To improve performance, optionally mark the image as not writeable to
+    # pass by reference.
+    image.flags.writeable = False
+    if num_hands == 2:
+        hand_result = hands.process(image)
+    else:
+        hand_result = one_hand.process(image)
+    pose_result = pose.process(image)
+
+    return [hand_result, pose_result]
+
+
+def process_video(video_src, show=False, flip=False, num_hands=2):
     '''
     Process hand and pose information from video source using mediapipe.
     Returns:
     A dict containing timestamps, hand_results, and pose_results
     '''
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture(video_src)
     timestamps = []
     hand_results = []
     pose_results = []
@@ -59,30 +82,18 @@ def process_video(video_path, show=True):
         if not success:
             # If loading from webcam, use 'continue' instead of 'break'.
             break
-        timestamps.append(cap.get(cv2.CAP_PROP_POS_MSEC))
+        if flip:
+            image = cv2.flip(image, 1)
 
-        # Flip image around y-axis for correct handedness output.
-        image = cv2.flip(image, 1)
-        # Convert the BGR image to RGB.
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # To improve performance, optionally mark the image as not writeable to
-        # pass by reference.
-        image.flags.writeable = False
-        hand_result = hands.process(image)
-        pose_result = pose.process(image)
+        timestamps.append(cap.get(cv2.CAP_PROP_POS_MSEC))
+        hand_result, pose_result = get_mediapipe_results(image, num_hands=num_hands)
+
         hand_results.append(hand_result)
         pose_results.append(pose_result)
 
         # Draw the hand and pose annotations on the image.
         if show:
-            image.flags.writeable = True
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            mp_drawing.draw_landmarks(
-                image, pose_result.pose_landmarks, mp_pose.UPPER_BODY_POSE_CONNECTIONS)
-            if hand_result.multi_hand_landmarks:
-                for hand_landmarks in hand_result.multi_hand_landmarks:
-                    mp_drawing.draw_landmarks(
-                        image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+            image = get_image_overlay(image, hand_result, pose_result)
             cv2.imshow('MediaPipe Processed Video', image)
             if cv2.waitKey(5) & 0xFF == 27:
                 break
@@ -93,10 +104,24 @@ def process_video(video_path, show=True):
             'hand_results': hand_results,
             'pose_results': pose_results}
 
+def get_image_overlay(image, hand_result, pose_result):
+    image.flags.writeable = True
+    image = cv2.flip(image, 1)
+
+    mp_drawing.draw_landmarks(
+        image, pose_result.pose_landmarks, mp_pose.UPPER_BODY_POSE_CONNECTIONS)
+    if hand_result.multi_hand_landmarks:
+        for hand_landmarks in hand_result.multi_hand_landmarks:
+            mp_drawing.draw_landmarks(
+                image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+    
+    image = cv2.flip(image, 1)
+    return image
+
 def parse_data(processed):
     '''
     Parse the intermediate mediapipe data objects into a pd DataFrame object
-    to be saved into a csv file.
+    of shape (num_frames, 202) to be saved into a csv file.
     '''
     timestamps = processed['timestamps']
     hand_results = processed['hand_results']
@@ -119,6 +144,7 @@ def parse_data(processed):
                 # Possible improvement here is to infer the correct classification based on previous frames
                 hand_data.multi_handedness[0].classification[0].label = 'Left'
                 hand_data.multi_handedness[1].classification[0].label = 'Right'
+            # print(hand_data.multi_handedness[0].classification[0].label)
 
             for hand_idx, hand_landmarks in enumerate(hand_data.multi_hand_landmarks):
                 handedness = 0 if hand_data.multi_handedness[hand_idx].classification[0].label == 'Left' else 1
@@ -159,7 +185,7 @@ def save_parsed_data(video_metadata, dataframe):
 
     word = video_metadata['word']
     synonyms = video_metadata['synonyms']
-    video_src = video_metadata['video_path']
+    video_src = video_metadata['video_src']
 
     # Save video data
     if not os.path.isdir(os.path.join('data', word)):
@@ -180,7 +206,13 @@ def save_parsed_data(video_metadata, dataframe):
         with open(metadata_path) as f:
             metadata = json.load(f)
 
-    metadata[word] = {'synonyms': synonyms, 'video_src': {str(sample_idx): video_src}}
+    entry = {'synonyms': synonyms, 'video_src': {}}
+    if metadata.get(word):
+        entry = metadata.get(word)
+
+    entry['video_src'][str(sample_idx)] = video_src
+
+    metadata[word] = entry
 
     to_json = json.dumps(metadata)
     with open(metadata_path, 'w') as f:
@@ -196,7 +228,7 @@ def main(start_from):
             video_metadata = request_video_info(ref_id)
             if video_metadata:
                 # Process video with mediapipe to get hand and pose data
-                processed = process_video(video_metadata['video_path'], show=False)
+                processed = process_video(video_metadata['video_src'], show=False)
                 # Parse mediapipe data into csv format
                 dataframe = parse_data(processed)
                 # Save data
@@ -204,10 +236,31 @@ def main(start_from):
         except:
             print('ERROR: failed to save data for ref id', ref_id)
 
+def letter_augment():
+    from letters_dict import letter_vids
+    for letter in letter_vids:
+        print(letter)
+        for video_src in letter_vids[letter]:
 
+            # Process video with mediapipe to get hand and pose data
+            processed = process_video(video_src, show=False, num_hands=1)
+            # Parse mediapipe data into csv format
+            dataframe = parse_data(processed)
+            video_metadata = {'word': letter,
+                              'synonyms': [],
+                              'video_src': video_src}
+            # Save data
+            save_parsed_data(video_metadata, dataframe)
+            # processed = process_video(letter_vids[letter][2], show=True, flip=True, num_hands=1)
+            # processed = process_video(video_src, show=True, num_hands=1, flip=True)
+
+        
 
 if __name__ == "__main__":
-    start_from = 0
-    if len(sys.argv) == 2:
-        start_from = int(sys.argv[1])
-    main(start_from)
+    # process_video(sys.argv[1])
+    # start_from = 0
+    # if len(sys.argv) == 2:
+    #     start_from = int(sys.argv[1])
+    # main(start_from)
+    letter_augment()
+    # pass
