@@ -1,5 +1,12 @@
+numpy==1.19
 opencv-python
 mediapipe
 pandas
 requests
 requests-html
+jupyter
+matplotlib
+scikit-learn
+keras
+tensorflow
+kivy
