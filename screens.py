@@ -9,7 +9,6 @@ import cv2
 import string
 import numpy as np
 
-
 font_sz = metrics.dp(50)
 button_sz = metrics.dp(100)
 
@@ -72,7 +71,7 @@ class LearningScreen(Screen):
         self.target = 'A'
         self._score_counter = 0
         self._feedback_counter = 0
-        vid_src = 'asl_letter_data/{}.mp4'.format(self.target)
+        vid_src = 'guide_videos/{}.mp4'.format(self.target)
         self.guide_video = cv2.VideoCapture(vid_src)
 
         self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
@@ -102,7 +101,7 @@ class LearningScreen(Screen):
             if keycode[1].upper() != self.target:
                 self._score_counter = 0
             self.target = keycode[1].upper()
-            vid_src = 'asl_letter_data/{}.mp4'.format(self.target)
+            vid_src = 'guide_videos/{}.mp4'.format(self.target)
             self.guide_video = cv2.VideoCapture(vid_src)
 
     def on_update(self):
@@ -116,47 +115,38 @@ class LearningScreen(Screen):
             self.info.text += 'Nice job!'
             self._feedback_counter += 1
 
+        # Update guide video display
+        if self.guide_video:
+            success, frame = self.guide_video.read()
+            if success:
+                buf1 = cv2.flip(frame, 0)
+                buf1 = cv2.flip(buf1, 1)
+                buf = buf1.tostring()
+                texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
+                texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+                self.guide_video_display.texture = texture
 
         # Update webcam display
-        success, frame, pred, score = self.webcam.get_next_frame(return_pred=True)
-        if success:
+        frame_info = self.webcam.get_next_frame()
+        if frame_info:
+            frame, pred, score = frame_info
             buf1 = cv2.flip(frame, 0)
             buf = buf1.tostring()
             texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
             texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
             self.webcam_display.texture = texture
 
-        # Update guide video display
-        if self.guide_video:
-            # if not self.guide_video.isOpened():
-            #     self.guide_video = None
-            #     return
-            success, frame = self.guide_video.read()
-            if success:
-                buf1 = cv2.flip(frame, 0)
-                buf1 = cv2.flip(buf1, 1)
-                buf = buf1.tostring()
-                # if webcam.framecount % 10 == 0:
-                #     print(webcam.framecount)
-                # cv2.waitKey(0)
-                # print(time.time()-s)
-                texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
-                texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
-                self.guide_video_display.texture = texture
-
-        # Check if prediction is correct
-        # TODO: more robust way of parsing prediction
-        if pred.replace('LETTER-','') == self.target:
-            self._score_counter += 1
-        if self._score_counter > 10:
-            print('Nice job!')
-            self._score_counter = 0
-            self._feedback_counter = 1
-            self.target = next_alpha(self.target)
-            vid_src = 'asl_letter_data/{}.mp4'.format(self.target)
-            # if self.guide_video.isOpened():
-            #     self.guide_video.close()
-            self.guide_video = cv2.VideoCapture(vid_src)
+            # Check if prediction is correct
+            # TODO: more robust way of parsing prediction
+            if pred.replace('LETTER-','') == self.target:
+                self._score_counter += 1
+            if self._score_counter > 10:
+                print('Nice job!')
+                self._score_counter = 0
+                self._feedback_counter = 1
+                self.target = next_alpha(self.target)
+                vid_src = 'guide_videos/{}.mp4'.format(self.target)
+                self.guide_video = cv2.VideoCapture(vid_src)
 
     def on_layout(self, win_size):
         resize_topleft_label(self.info)
@@ -233,28 +223,25 @@ class GameScreen(Screen):
             self._cur_letter_idx = 0
             self.target = choose_word(self.target)
 
-
         # Update webcam display
-        success, frame, pred, score = self.webcam.get_next_frame(return_pred=True)
-        if success:
+        frame_info = self.webcam.get_next_frame()
+        if frame_info:
+            frame, pred, score = frame_info
             buf1 = cv2.flip(frame, 0)
             buf = buf1.tostring()
             texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
             texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
             self.webcam_display.texture = texture
 
-        # Check if prediction is correct
-        # TODO: more robust way of parsing prediction
-        cur_letter = self.target[self._cur_letter_idx]
-        if pred.replace('LETTER-','') == cur_letter:
-            self._score_counter += 1
-        if self._score_counter > 10:
-            # move onto next letter
-            self._score_counter = 0
-            self._cur_letter_idx += 1
-
-
-
+            # Check if prediction is correct
+            # TODO: more robust way of parsing prediction
+            cur_letter = self.target[self._cur_letter_idx]
+            if pred.replace('LETTER-','') == cur_letter:
+                self._score_counter += 1
+            if self._score_counter > 10:
+                # move onto next letter
+                self._score_counter = 0
+                self._cur_letter_idx += 1
 
 
 

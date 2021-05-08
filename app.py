@@ -1,7 +1,7 @@
 from common.core import run
 from common.screen import ScreenManager
 from screens import IntroScreen, LearningScreen, GameScreen
-from evaluate_sign import WebcamHandler
+from webcam_handler import WebcamHandler
 
 
 if __name__ == "__main__":
