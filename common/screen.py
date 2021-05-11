@@ -137,3 +137,9 @@ class ScreenManager(BaseWidget):
         else:
             raise Exception('Error: Screen name {} not found'.format(screen_name))
 
+    def get_screen(self, screen_name):
+        next_screen = [s for s in self.screens if s.name == screen_name]
+        if next_screen:
+            return next_screen[0]
+        else:
+            raise Exception('Error: Screen name {} not found'.format(screen_name))

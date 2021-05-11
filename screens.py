@@ -8,11 +8,14 @@ from kivy import metrics
 import cv2
 import string
 import numpy as np
+from levels import Level
 
 font_sz = metrics.dp(50)
 button_sz = metrics.dp(100)
 
-def next_alpha(s):
+def next_alpha(s, alpha_range=None):
+    if alpha_range:
+        return chr((ord(s.upper())+1 - ord(alpha_range[0])) % len(alpha_range) + ord(alpha_range[0]))
     return chr((ord(s.upper())+1 - 65) % 26 + 65)
 
 def choose_word(word):
@@ -25,7 +28,7 @@ def choose_word(word):
 # This allows it to work with the ScreenManager system.
 class IntroScreen(Screen):
     def __init__(self, **kwargs):
-        super(IntroScreen, self).__init__(always_update=False, **kwargs)
+        super(IntroScreen, self).__init__(**kwargs)
 
         w, h = Window.size
 
@@ -40,11 +43,11 @@ class IntroScreen(Screen):
         # It takes a function as argument. You can define one, or just use lambda as an inline function.
         # In this case, the button will cause a screen switch
         self.lmode_button = Button(text='Learning Mode', font_name="AtlantisInternational", font_size=font_sz, size=(0.5*w, 0.15*h), pos=(0.25*w, 0.35*h))
-        self.lmode_button.bind(on_release= lambda x: self.switch_to('learning'))
+        self.lmode_button.bind(on_release= lambda x: self.switch_to('lmode_main'))
         self.add_widget(self.lmode_button)
 
         self.gmode_button = Button(text='Game Mode', font_name="AtlantisInternational", font_size=font_sz, size=(0.5*w, 0.15*h), pos=(0.25*w, 0.15*h))
-        self.gmode_button.bind(on_release= lambda x: self.switch_to('game'))
+        self.gmode_button.bind(on_release= lambda x: self.switch_to('gmode'))
         self.add_widget(self.gmode_button)
 
     # def on_key_down(self, keycode, modifiers):
@@ -63,12 +66,75 @@ class IntroScreen(Screen):
         self.gmode_button.size = (0.5*w, 0.15*h)
         self.gmode_button.pos = (0.25*w, 0.15*h)
 
+class LmodeMainScreen(Screen):
+    def __init__(self, level_switch_callback, **kwargs):
+        super(LmodeMainScreen, self).__init__(**kwargs)
+
+        self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
+        self.info.text = "Learning Mode\n"
+
+        self.add_widget(self.info)
+
+        w, h = Window.size
+        # self.row = 0
+        # self.level = 0
+        self.level_switch_callback = level_switch_callback
+
+        # more buttons - one to switch back to the intro screen, and one to switch to the end screen.
+        self.intro_button = Button(text='Return to Main Screen', font_size=font_sz, font_name="AtlantisInternational", size=(0.5*w, 0.15*h), pos=(0.25*w, 0.05*h))
+        self.intro_button.bind(on_release= lambda x: self.switch_to('intro'))
+        self.add_widget(self.intro_button)
+        
+        # todo
+        self.level_buttons = []
+        self.levels = []
+        # Four rows of three consecutive levels
+        for row in range(4):
+            for level in range(3):
+                idx = 3 * row + level
+                lvl_button = Button(text='level{}-{}'.format(row,level), font_size=font_sz/2., font_name="AtlantisInternational", size=(0.25*w, 0.15*h), pos=(0.25*level*w+0.25*w, 0.2*(3-row)*h+0.2*h))
+                lvl_button.bind(on_release= lambda x: self.enter_lmode(x))
+                lvl = Level(mode='lmode', level=idx)
+                self.levels.append(lvl)
+                # lvl_button.bind(on_release= lambda x: self.switch_to('lmode'))
+                self.level_buttons.append(lvl_button)
+                self.add_widget(lvl_button)
+        
+        
+    def enter_lmode(self, row_level):
+        # print(row_level.text)
+        r,c = row_level.text.strip('level').split('-')
+        self.level_switch_callback('lmode', r, c)
+        self.switch_to('lmode')
+        # self.level = self.levels[row_level]
+        # print(self.level)
+        # self.row = row
+        # self.level = level
+
+    def on_key_down(self, keycode, modifiers):
+        print(keycode[1])
+
+    def on_update(self):
+        # Update screen text
+        self.info.text = self.info.text = "Learning Mode\n"
+
+    def on_layout(self, win_size):
+        resize_topleft_label(self.info)
+        w, h = win_size
+        self.intro_button.size = (0.5*w, 0.15*h)
+        self.intro_button.pos = (0.25*w, 0.05*h)
+
+level_to_letters = {'0': 'ABCDEFG', '1': 'HIJKLMN', '2': 'OPQRST', '3': 'UVWXYZ'}
 
 class LearningScreen(Screen):
     def __init__(self, webcam, **kwargs):
         super(LearningScreen, self).__init__(**kwargs)
         self.webcam = webcam
-        self.target = 'A'
+
+        # TODO put all of this info in Level class
+        self.level = '0'
+        self.difficulty = '0'
+        self.target = level_to_letters[self.level][0]
         self._score_counter = 0
         self._feedback_counter = 0
         vid_src = 'guide_videos/{}.mp4'.format(self.target)
@@ -144,7 +210,7 @@ class LearningScreen(Screen):
                 print('Nice job!')
                 self._score_counter = 0
                 self._feedback_counter = 1
-                self.target = next_alpha(self.target)
+                self.target = next_alpha(self.target, level_to_letters[self.level])
                 vid_src = 'guide_videos/{}.mp4'.format(self.target)
                 self.guide_video = cv2.VideoCapture(vid_src)
 
@@ -157,6 +223,18 @@ class LearningScreen(Screen):
         self.guide_video_display.size = (0.5*w,0.375*h)
         self.intro_button.size = (0.5*w, 0.15*h)
         self.intro_button.pos = (0.25*w, 0.05*h)
+
+    def set_level(self, level, difficulty):
+        print('setting level:', level)
+        print('difficulty:', difficulty)
+        self.level = level
+        self.difficulty = difficulty
+        self.target = level_to_letters[self.level][0]
+        self._score_counter = 0
+        self._feedback_counter = 0
+        vid_src = 'guide_videos/{}.mp4'.format(self.target)
+        self.guide_video = cv2.VideoCapture(vid_src)
+
 
 
 class GameScreen(Screen):
