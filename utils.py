@@ -4,7 +4,7 @@ import pandas as pd
 import mediapipe as mp
 import string
 from sklearn import preprocessing
-from SignBankRefIDs import SB_REF_IDS
+# from SignBankRefIDs import SB_REF_IDS
 from requests_html import HTMLSession
 
 

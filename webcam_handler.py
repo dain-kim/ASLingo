@@ -9,7 +9,7 @@ from utils import mp_process_image, generate_dataframe, annotate_image, pred_cla
 
 
 # load the model
-with open('lda_letters_static_hand.pkl', 'rb') as f:
+with open('saved_model.pkl', 'rb') as f:
     model = pickle.load(f)
 
 
