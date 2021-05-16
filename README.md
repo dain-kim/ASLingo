@@ -24,6 +24,12 @@ Term project for 6.835 Intelligent Multimodal Interaction.
 
 ## How to Run
 
+```
+conda create -n aslingo python=3.8
+conda activate aslingo
+pip install -r requirements.txt
+```
+
 
 
 ## Data Collection and Processing

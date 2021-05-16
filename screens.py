@@ -12,6 +12,8 @@ from levels import Level
 
 font_sz = metrics.dp(50)
 button_sz = metrics.dp(100)
+level_to_letters = {'0': 'ABCDEFG', '1': 'HIJKLMN', '2': 'OPQRST', '3': 'UVWXYZ'}
+letters_to_level = {'A-G': '0', 'H-N': '1', 'O-T': '2', 'U-Z': '3'}
 
 def next_alpha(s, alpha_range=None):
     if alpha_range:
@@ -23,6 +25,32 @@ def choose_word(word):
     word_bank.remove(word)
     return np.random.choice(word_bank)
 
+def get_letters(col):
+    letters = level_to_letters[str(col)]
+    return letters
+
+def get_btn_text(row, col):
+    '''helper function for the LModeMainScreen to get the correct button text'''
+    letters = get_letters(col)
+    if row == 0:
+        # first level: learning
+        return 'letters {}-{}'.format(letters[0],letters[-1])
+    elif row == 1:
+        return 'review {}-{}'.format(letters[0],letters[-1])
+    elif row == 2:
+        return 'review {}-{}: shuffle'.format(letters[0],letters[-1])
+
+def get_level_difficulty(button_text):
+    if 'letters' in button_text:
+        difficulty = '0'
+    elif 'shuffle' in button_text:
+        difficulty = '2'
+    else:
+        difficulty = '1'
+    for k,v in letters_to_level.items():
+        if k in button_text:
+            level = letters_to_level[k]
+    return level, difficulty
 
 # IntroScreen is just like a MainWidget, but it derives from Screen instead of BaseWidget.
 # This allows it to work with the ScreenManager system.
@@ -89,21 +117,24 @@ class LmodeMainScreen(Screen):
         self.level_buttons = []
         self.levels = []
         # Four rows of three consecutive levels
-        for row in range(4):
-            for level in range(3):
-                idx = 3 * row + level
-                lvl_button = Button(text='level{}-{}'.format(row,level), font_size=font_sz/2., font_name="AtlantisInternational", size=(0.25*w, 0.15*h), pos=(0.25*level*w+0.25*w, 0.2*(3-row)*h+0.2*h))
+        for row in range(3):
+            for col in range(4):
+                # letters = get_letters(col)
+                # idx = 3 * row + col
+                lvl_button = Button(text=get_btn_text(row, col), font_size=font_sz/2., font_name="AtlantisInternational", size=(0.2*w, 0.15*h), pos=(0.2*col*w+0.1*w, 0.2*(3-row)*h+0.1*h))
                 lvl_button.bind(on_release= lambda x: self.enter_lmode(x))
-                lvl = Level(mode='lmode', level=idx)
-                self.levels.append(lvl)
+                level = Level(mode='lmode', level=col, difficulty=row)
+                self.levels.append(level)
                 # lvl_button.bind(on_release= lambda x: self.switch_to('lmode'))
                 self.level_buttons.append(lvl_button)
                 self.add_widget(lvl_button)
         
         
-    def enter_lmode(self, row_level):
+    def enter_lmode(self, button):
         # print(row_level.text)
-        r,c = row_level.text.strip('level').split('-')
+        # todo fix
+        # l1,l2 = row_level.text.strip('letters ').split('-')
+        r,c = get_level_difficulty(button.text)
         self.level_switch_callback('lmode', r, c)
         self.switch_to('lmode')
         # self.level = self.levels[row_level]
@@ -124,7 +155,6 @@ class LmodeMainScreen(Screen):
         self.intro_button.size = (0.5*w, 0.15*h)
         self.intro_button.pos = (0.25*w, 0.05*h)
 
-level_to_letters = {'0': 'ABCDEFG', '1': 'HIJKLMN', '2': 'OPQRST', '3': 'UVWXYZ'}
 
 class LearningScreen(Screen):
     def __init__(self, webcam, **kwargs):
@@ -217,7 +247,15 @@ class LearningScreen(Screen):
     def on_layout(self, win_size):
         resize_topleft_label(self.info)
         w, h = win_size
-        self.webcam_display.pos = (0.5*w, 0.3*h)
+        if self.difficulty == '0':
+            if self.guide_video_display not in self.canvas.children:
+                self.canvas.add(self.guide_video_display)
+            self.uncenter_webcam()
+        else:
+            if self.guide_video_display in self.canvas.children:
+                print('removing guide video display')
+                self.canvas.remove(self.guide_video_display)
+            self.center_webcam()
         self.webcam_display.size = (0.5*w,0.375*h)
         self.guide_video_display.pos = (0, 0.3*h)
         self.guide_video_display.size = (0.5*w,0.375*h)
@@ -232,8 +270,28 @@ class LearningScreen(Screen):
         self.target = level_to_letters[self.level][0]
         self._score_counter = 0
         self._feedback_counter = 0
-        vid_src = 'guide_videos/{}.mp4'.format(self.target)
-        self.guide_video = cv2.VideoCapture(vid_src)
+        if self.difficulty == '0':
+            if self.guide_video_display not in self.canvas.children:
+                self.canvas.add(self.guide_video_display)
+            self.uncenter_webcam()
+            vid_src = 'guide_videos/{}.mp4'.format(self.target)
+            self.guide_video = cv2.VideoCapture(vid_src)
+        else:
+            if self.guide_video:
+                self.guide_video.release()
+            self.guide_video = None
+            if self.guide_video_display in self.canvas.children:
+                print('removing guide video display')
+                self.canvas.remove(self.guide_video_display)
+            self.center_webcam()
+
+    def center_webcam(self):
+        w,h = Window.size
+        self.webcam_display.pos = (0.25*w, 0.3*h)
+
+    def uncenter_webcam(self):
+        w,h = Window.size
+        self.webcam_display.pos = (0.5*w, 0.3*h)
 
 
 
