@@ -84,11 +84,12 @@ class WebcamHandler():
             pred_prob = model.predict_proba([data])[0]
             pred_class = list(pred_prob).index(max(pred_prob))
             if max(pred_prob) < pred_thresh:
-                print('PREDICTED: NEUTRAL', max(pred_prob))
+                # print('PREDICTED: NEUTRAL', max(pred_prob))
+                pass
             else:
                 prediction = pred_class_to_letter(pred_class)[0]
                 score = str(round(max(pred_prob),2))
-                print('PREDICTED:', prediction, score)
+                # print('PREDICTED:', prediction, score)
 
         if self.hand_results:
             image = annotate_image(image, self.hand_results[-1], self.pose_results[-1])

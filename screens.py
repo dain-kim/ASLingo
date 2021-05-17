@@ -13,16 +13,7 @@ from levels import Level
 font_sz = metrics.dp(50)
 button_sz = metrics.dp(100)
 set_idx_to_letters = {0: 'ABCDEFG', 1: 'HIJKLMN', 2: 'OPQRST', 3: 'UVWXYZ'}
-
-def next_alpha(s, alpha_range=None):
-    if alpha_range:
-        return chr((ord(s.upper())+1 - ord(alpha_range[0])) % len(alpha_range) + ord(alpha_range[0]))
-    return chr((ord(s.upper())+1 - 65) % 26 + 65)
-
-def choose_word(word):
-    word_bank = ['ANDY','FRIEND','SUNDAY','GUAVA','BANANA','CAT','DOG','HAND']
-    word_bank.remove(word)
-    return np.random.choice(word_bank)
+ALL_LEVELS = {}
 
 def gen_button_text(mode, letter_set, difficulty):
     '''helper function for the LModeMainScreen to get the correct button text'''
@@ -38,8 +29,6 @@ def gen_button_text(mode, letter_set, difficulty):
         return 'TEMP'
 
 
-# IntroScreen is just like a MainWidget, but it derives from Screen instead of BaseWidget.
-# This allows it to work with the ScreenManager system.
 class IntroScreen(Screen):
     def __init__(self, **kwargs):
         super(IntroScreen, self).__init__(**kwargs)
@@ -52,10 +41,7 @@ class IntroScreen(Screen):
                                 font_name="AtlantisInternational")
         self.canvas.add(self.title)
 
-        # A button is a widget. It must be added with add_widget()
-        # button.bind allows you to set up a reaction to when the button is pressed (or released).
-        # It takes a function as argument. You can define one, or just use lambda as an inline function.
-        # In this case, the button will cause a screen switch
+        # Buttons for entering learning/game main screen
         self.lmode_button = Button(text='Learning Mode', font_name="AtlantisInternational", font_size=font_sz, size=(0.5*w, 0.15*h), pos=(0.25*w, 0.35*h))
         self.lmode_button.bind(on_release= lambda x: self.switch_to('lmode_main'))
         self.add_widget(self.lmode_button)
@@ -64,7 +50,6 @@ class IntroScreen(Screen):
         self.gmode_button.bind(on_release= lambda x: self.switch_to('gmode_main'))
         self.add_widget(self.gmode_button)
 
-    # on_layout always gets called - even when a screen is not active.
     def on_layout(self, win_size):
         w, h = win_size
         self.title.set_cpos((w/2, 2*h/3))
@@ -77,28 +62,25 @@ class LmodeMainScreen(Screen):
     def __init__(self, enter_level, **kwargs):
         super(LmodeMainScreen, self).__init__(**kwargs)
         
-        '''
-        # Add background image
-        self.background_image = Image(source='level_select.png', pos_hint={'center_x': .5, 'center_y': .5}, size_hint_y=1, allow_stretch=False)
-        self.add_widget(self.background_image)
-        # Add background sound
-        self.audio = Audio(2)
-        self.mixer = Mixer()
-        self.audio.set_generator(self.mixer)
-        self.background_audio = WaveGenerator(WaveFile("./data/howto.wav"), loop=True)
-        self.mixer.add(self.background_audio)
-        self.bg.pause()
-        # Add graphic text
-        self.explain1 = CLabelRect(cpos=(w/2, 0.8*h),
-                                   text="Choose a level",
-                                font_size=36,
-                                   font_name="AtlantisInternational")
-        self.canvas.add(self.explain1)
-        '''
+        # # Add background image
+        # self.background_image = Image(source='level_select.png', pos_hint={'center_x': .5, 'center_y': .5}, size_hint_y=1, allow_stretch=False)
+        # self.add_widget(self.background_image)
+        # # Add background sound
+        # self.audio = Audio(2)
+        # self.mixer = Mixer()
+        # self.audio.set_generator(self.mixer)
+        # self.background_audio = WaveGenerator(WaveFile("./data/howto.wav"), loop=True)
+        # self.mixer.add(self.background_audio)
+        # self.bg.pause()
+        # # Add graphic text
+        # self.explain1 = CLabelRect(cpos=(w/2, 0.8*h),
+        #                            text="Choose a level",
+        #                         font_size=36,
+        #                            font_name="AtlantisInternational")
+        # self.canvas.add(self.explain1)
 
         self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
         self.info.text = "Learning Mode\n"
-
         self.add_widget(self.info)
 
         w, h = Window.size
@@ -115,13 +97,13 @@ class LmodeMainScreen(Screen):
         
         # Add button for each level
         self.level_buttons = {}  # button_to_level
-        self.unlocked = []
+        # self.levels = {}
         
-        # Four rows of three consecutive levels
+        # Four sets of letters, three difficulties
         for letter_set in range(4):
             for difficulty in range(3):
                 lvl_button = Button(
-                    text=gen_button_text('lmode',letter_set,difficulty), 
+                    text=gen_button_text('lmode', letter_set, difficulty), 
                     font_size=font_sz/2., 
                     font_name="AtlantisInternational", 
                     size=(0.2*w, 0.15*h), 
@@ -131,16 +113,18 @@ class LmodeMainScreen(Screen):
                     # background_locked_normal='bt.png',
                     # background_locked_down = 'bt_down.png',
                     )
-                # if (difficulty,letter_set) not in self.unlocked:
-                #     lvl_button.disabled = True
+                
                     
                 lvl_button.bind(on_release=self.to_level)
                 # self.grid.add_widget(lvl_button)
                 self.add_widget(lvl_button)
                 
-                level = Level(mode='lmode', letter_set=letter_set, difficulty=difficulty)
+                # only first difficulty is unlocked in the beginning
+                level = Level(mode='lmode', letter_set=letter_set, difficulty=difficulty, unlocked=(difficulty == 0))
                 self.level_buttons[lvl_button] = level
-                # lvl_button.bind(on_release= lambda x: self.switch_to('lmode'))
+                ALL_LEVELS[('lmode', letter_set, difficulty)] = {'level':level, 'button':lvl_button}
+                if not level.unlocked:
+                    lvl_button.disabled = True
 
     def to_level(self, button):
         level = self.level_buttons[button]
@@ -161,11 +145,12 @@ class LmodeMainScreen(Screen):
 
 
 class LearningScreen(Screen):
-    def __init__(self, webcam, get_level, **kwargs):
+    def __init__(self, webcam, **kwargs):
         super(LearningScreen, self).__init__(**kwargs)
         self.webcam = webcam
-        self.get_level = get_level
-        self.level = self.get_level()
+        # self.get_level = get_level
+        # self.level = self.get_level()
+        self.level = Level(mode='lmode',letter_set=0,difficulty=0)
         self.guide_video = cv2.VideoCapture(self.level.vid_src)
 
         self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
@@ -187,6 +172,9 @@ class LearningScreen(Screen):
         self.canvas.add(self.webcam_display)
         self.guide_video_display = Rectangle(pos=(0, 0.3*h), size=(0.5*w,0.375*h))
         self.canvas.add(self.guide_video_display)
+    
+    def on_exit(self):
+        print('EXITING LEARNING SCREEN')
 
 
     def on_key_down(self, keycode, modifiers):
@@ -194,9 +182,9 @@ class LearningScreen(Screen):
         if keycode[1] in string.ascii_lowercase:
             # TODO decide whether to keep the keyboard functionality
             # If H+ is pressed in set A-G, what happens?
-            
-            if self.level.set_target(keycode[1].upper()):
-                self.guide_video = cv2.VideoCapture(self.level.vid_src)
+            if keycode[1].upper() in set_idx_to_letters[self.level.letter_set]:
+                if self.level.set_target(keycode[1].upper()):
+                    self.guide_video = cv2.VideoCapture(self.level.vid_src)
 
     def on_update(self):
         # Update guide video display
@@ -221,7 +209,12 @@ class LearningScreen(Screen):
             self.webcam_display.texture = texture
                 
             # Update level
-            if self.level.on_update(frame_info):
+            level_update = self.level.on_update(frame_info)
+            #TODO better way of doing this
+            if level_update == "level complete":
+                self.unlock_next_levels()
+                self.switch_to('lmode_main')
+            elif level_update:
                 self.guide_video = cv2.VideoCapture(self.level.vid_src)
         
         # Update screen text
@@ -266,6 +259,26 @@ class LearningScreen(Screen):
             if self.guide_video_display in self.canvas.children:
                 self.canvas.remove(self.guide_video_display)
             self.center_webcam()
+    
+    def unlock_next_levels(self):
+        # if not the final difficulty, unlock the next difficulty
+        if self.level.difficulty != 2:
+            level_to_unlock = ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty+1)]
+            level_to_unlock['level'].unlocked = True
+            level_to_unlock['button'].disabled = False
+        # if final difficulty, unlock corresponding game level
+        else:
+            level_to_unlock = ALL_LEVELS[('gmode', self.level.letter_set, 0)]
+            level_to_unlock['level'].unlocked = True
+            level_to_unlock['button'].disabled = False
+            # also unlock next set of letters (if any)
+            if self.level.letter_set != 3:
+                level_to_unlock = ALL_LEVELS[(self.level.mode, self.level.letter_set+1, 0)]
+                level_to_unlock['level'].unlocked = True
+                level_to_unlock['button'].disabled = False
+        
+        # print('moving onto the next level...')
+        # self.set_level(level_to_unlock['level'])
 
     def center_webcam(self):
         w,h = Window.size
@@ -317,7 +330,7 @@ class GmodeMainScreen(Screen):
         
         # Add button for each level
         self.level_buttons = {}  # button_to_level
-        self.unlocked = []
+        # self.unlocked = []
         
         # Four rows of three consecutive levels
         for letter_set in range(4):
@@ -333,16 +346,23 @@ class GmodeMainScreen(Screen):
                     # background_locked_normal='bt.png',
                     # background_locked_down = 'bt_down.png',
                     )
-                # if (difficulty,letter_set) not in self.unlocked:
-                #     lvl_button.disabled = True
                     
                 lvl_button.bind(on_release=self.to_level)
                 # self.grid.add_widget(lvl_button)
                 self.add_widget(lvl_button)
                 
-                level = Level(mode='gmode', letter_set=letter_set, difficulty=difficulty)
+                level = Level(mode='gmode', letter_set=letter_set, difficulty=difficulty, unlocked=False)
                 self.level_buttons[lvl_button] = level
-                # lvl_button.bind(on_release= lambda x: self.switch_to('lmode'))
+                ALL_LEVELS[('gmode', letter_set, difficulty)] = {'level':level, 'button':lvl_button}
+                if not level.unlocked:
+                    lvl_button.disabled = True
+
+    def unlock_next_levels(self):
+        # if not the final difficulty, unlock the next difficulty
+        if self.level.difficulty != 2:
+            level_to_unlock = ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty+1)]
+            level_to_unlock['level'].unlocked = True
+            level_to_unlock['button'].disabled = False
 
     def to_level(self, button):
         level = self.level_buttons[button]
@@ -363,12 +383,13 @@ class GmodeMainScreen(Screen):
 
 
 class GameScreen(Screen):
-    def __init__(self, webcam, get_level, **kwargs):
+    def __init__(self, webcam, **kwargs):
         super(GameScreen, self).__init__(**kwargs)
         self.webcam = webcam
-        self.get_level = get_level
-        self.level = self.get_level()
-        self.guide_video = cv2.VideoCapture(self.level.vid_src)
+        # self.get_level = get_level
+        # self.level = self.get_level()
+        self.level = Level(mode='gmode',letter_set=0,difficulty=0)
+        # self.guide_video = cv2.VideoCapture(self.level.vid_src)
 
         self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
         self.info.text = "Game Mode\n"
@@ -392,6 +413,8 @@ class GameScreen(Screen):
         # self.guide_video_display = Rectangle(pos=(0, 0.3*h), size=(0.5*w,0.375*h))
         # self.canvas.add(self.guide_video_display)
 
+    def on_exit(self):
+        print('EXITING GAME SCREEN')
 
     def on_key_down(self, keycode, modifiers):
         print(keycode[1])
@@ -424,7 +447,11 @@ class GameScreen(Screen):
             # Update level
             # if self.level.on_update(frame_info):
             #     self.guide_video = cv2.VideoCapture(self.level.vid_src)
-            self.level.on_update(frame_info)
+            level_update = self.level.on_update(frame_info)
+            #TODO better way of doing this
+            if level_update == "level complete":
+                self.unlock_next_levels()
+                self.switch_to('gmode_main')
         
         # Update screen text
         self.info.text = "Game Mode\n"
