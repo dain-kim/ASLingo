@@ -9,20 +9,28 @@ class Level():
         self.mode = mode
         self.letter_set = letter_set
         self.difficulty = difficulty
+        self._cur_letter_idx = 0
         
-        self.target = set_idx_to_letters[self.letter_set][0]
-        if self.difficulty == 2:
-            self.target = self.get_next_target()
+        if self.mode == 'lmode':
+            self.target = set_idx_to_letters[self.letter_set][0]
+            if self.difficulty == 2:
+                self.target = self.get_next_target()
+        elif self.mode == 'gmode':
+            self.target = 'ANDY' # TODO
         self.feedback = ""
         self._score_counter = 0
         self._feedback_counter = 0
-        self.vid_src = 'guide_videos/{}.mp4'.format(self.target)
+        if self.mode == 'lmode':
+            self.vid_src = 'guide_videos/{}.mp4'.format(self.target)
     
     def set_target(self, target):
         if self.target != target:
             self.target = target
             self._score_counter = 0
-            self.vid_src = 'guide_videos/{}.mp4'.format(self.target)
+            if self.mode == 'lmode':
+                self.vid_src = 'guide_videos/{}.mp4'.format(self.target)
+            if self.mode == 'gmode':
+                self._cur_letter_idx = 0
             return True
         return False
     
@@ -35,6 +43,11 @@ class Level():
             else:
                 letters = [l for l in set_idx_to_letters[self.letter_set] if l != self.target]
                 return np.random.choice(letters)
+        elif self.mode == 'gmode':
+            word_bank = ['ANDY','FRIEND','SUNDAY','GUAVA','BANANA','CAT','DOG','HAND']
+            word_bank.remove(self.target)
+            return np.random.choice(word_bank)
+            
     
     def on_update(self, frame_info):
         frame, pred, score = frame_info
@@ -49,9 +62,21 @@ class Level():
 
         # Update score
         # TODO: more robust way of parsing prediction
-        if pred.replace('LETTER-','') == self.target:
-            self._score_counter += 1
-        if self._score_counter > 10:
-            self._score_counter = 0
-            self._feedback_counter = 1
-            return self.set_target(self.get_next_target())
+        if self.mode == 'lmode':
+            if pred.replace('LETTER-','') == self.target:
+                self._score_counter += 1
+            if self._score_counter > 10:
+                self._score_counter = 0
+                self._feedback_counter = 1
+                return self.set_target(self.get_next_target())
+        elif self.mode == 'gmode':
+            if pred.replace('LETTER-','') == self.target[self._cur_letter_idx]:
+                self._score_counter += 1
+            if self._score_counter > 10:
+                self._score_counter = 0
+                self._feedback_counter = 1
+                self._cur_letter_idx += 1
+                if len(self.target) == self._cur_letter_idx:
+                    print('FINISHED WORD')
+                    return self.set_target(self.get_next_target())
+

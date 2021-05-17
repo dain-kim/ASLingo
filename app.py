@@ -1,6 +1,6 @@
 from common.core import run
 from common.screen import ScreenManager
-from screens import IntroScreen, LearningScreen, GameScreen, LmodeMainScreen
+from screens import IntroScreen, LmodeMainScreen, GmodeMainScreen, LearningScreen, GameScreen
 from webcam_handler import WebcamHandler
 from levels import Level
 
@@ -10,7 +10,7 @@ if __name__ == "__main__":
     sm = ScreenManager()
     webcam = WebcamHandler()
     # global var that changes
-    app_level = Level(mode='dummy',letter_set=0,difficulty=0)
+    app_level = Level(mode='lmode',letter_set=0,difficulty=0)
 
     def enter_level(level):
         global app_level
@@ -25,8 +25,9 @@ if __name__ == "__main__":
     # Add all screens to the manager. The first screen added is the current screen.
     sm.add_screen(IntroScreen(name='intro'))
     sm.add_screen(LmodeMainScreen(enter_level=enter_level, name='lmode_main'))
+    sm.add_screen(GmodeMainScreen(enter_level=enter_level, name='gmode_main'))
     sm.add_screen(LearningScreen(webcam, get_level=get_level, name='lmode'))
-    sm.add_screen(GameScreen(webcam, name='gmode'))
+    sm.add_screen(GameScreen(webcam, get_level=get_level, name='gmode'))
     
     run(sm)
 
