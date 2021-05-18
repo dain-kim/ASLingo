@@ -15,10 +15,13 @@ class Screen(Widget):
         :param always_update: if True, on_update() is called all the time, even if this Screen is not active
         """
 
-        super(Screen, self).__init__(**kwargs)
+        super(Screen, self).__init__()
         self.name = name
         self.always_update = always_update
         self.manager = None
+        # print('screen',kwargs)
+        # for key,value in kwargs.items():
+        #     print(key)
 
     def switch_to(self, screen_name):
         """Switches to from the current screen to a different screen.

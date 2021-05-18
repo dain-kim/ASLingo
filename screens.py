@@ -1,7 +1,9 @@
 from common.screen import Screen
-from common.gfxutil import topleft_label, resize_topleft_label, CLabelRect
+from common.gfxutil import topleft_label, resize_topleft_label, CRectangle, CLabelRect
 from kivy.graphics.texture import Texture
-from kivy.graphics import Rectangle
+from kivy.graphics import Color, Line, Rectangle
+from kivy.graphics.instructions import InstructionGroup
+from kivy.core.image import Image
 from kivy.uix.button import Button
 from kivy.core.window import Window
 from kivy import metrics
@@ -9,6 +11,7 @@ import cv2
 import string
 import numpy as np
 from levels import Level
+import time
 
 font_sz = metrics.dp(50)
 button_sz = metrics.dp(100)
@@ -27,11 +30,11 @@ def gen_button_text(mode, letter_set, difficulty):
             return 'shuffle {}-{}'.format(letters[0],letters[-1])
     elif mode == 'gmode':
         if difficulty == 0:
-            return '{}-{}\n3 letter words'.format('A',letters[-1])
+            return '{}-{}\nshort words'.format('A',letters[-1])
         elif difficulty == 1:
-            return '{}-{}\n4 letter words'.format('A',letters[-1])
+            return '{}-{}\nmedium words'.format('A',letters[-1])
         elif difficulty == 2:
-            return '{}-{}\n5 letter words'.format('A',letters[-1])
+            return '{}-{}\nlong words'.format('A',letters[-1])
 
 class IntroScreen(Screen):
     def __init__(self, **kwargs):
@@ -79,12 +82,15 @@ class IntroScreen(Screen):
         self.gmode_button.pos = (0.25*w, 0.05*h)
 
 class LmodeMainScreen(Screen):
-    def __init__(self, enter_level, **kwargs):
+    def __init__(self, enter_level, channel, **kwargs):
         super(LmodeMainScreen, self).__init__(**kwargs)
         
-        # # Add background image
-        # self.background_image = Image(source='level_select.png', pos_hint={'center_x': .5, 'center_y': .5}, size_hint_y=1, allow_stretch=False)
-        # self.add_widget(self.background_image)
+        self.godmode = channel
+        w, h = Window.size
+        # Add background image
+        # background = Image('assets/background.png')
+        # self.background_image = CRectangle(cpos=(w * .5, h * .9), csize=(w * 2, h * 1.8), texture=background.texture)
+        # self.canvas.add(self.background_image)
         # # Add background sound
         # self.audio = Audio(2)
         # self.mixer = Mixer()
@@ -103,11 +109,9 @@ class LmodeMainScreen(Screen):
         self.info.text = "Learning Mode\n"
         self.add_widget(self.info)
 
-        w, h = Window.size
         # level transition function
         self.enter_level = enter_level
 
-        # buttons - one to switch back to the intro screen, and one to switch to the end screen.
         self.intro_button = Button(
             text='Return to Main Screen', 
             font_size=font_sz/2, 
@@ -118,6 +122,16 @@ class LmodeMainScreen(Screen):
             background_down = 'assets/button_down.png')
         self.intro_button.bind(on_release= lambda x: self.switch_to('intro'))
         self.add_widget(self.intro_button)
+        
+        self.help_button = Button(
+            text="", 
+            background_normal="assets/help.png", 
+            background_down="assets/help_down.png",
+            size=(metrics.dp(40), metrics.dp(40)), 
+            pos=(0.95*w, 0.05*h))
+        self.help_button.bind(
+            on_release=self.call_help)
+        self.add_widget(self.help_button)
         
         # self.grid = GridLayout(cols=4, spacing=0, padding=0, size_hint_y = None)
         # self.grid.bind(minimum_height=self.grid.setter('height'))
@@ -135,6 +149,7 @@ class LmodeMainScreen(Screen):
                     font_name="AtlantisInternational", 
                     size=(0.2*w, 0.15*h), 
                     pos=(0.2*letter_set*w+0.1*w, 0.2*(3-difficulty)*h+0.1*h),
+                    halign = 'center',
                     background_normal = 'assets/button{}.png'.format(str(letter_set)),
                     background_down = 'assets/button{}_down.png'.format(str(letter_set)),
                     # background_locked_normal= 'assets/button{}.png'.format(str(letter_set)),
@@ -148,7 +163,12 @@ class LmodeMainScreen(Screen):
                 self.add_widget(lvl_button)
                 
                 # only first difficulty is unlocked in the beginning
-                level = Level(mode='lmode', letter_set=letter_set, difficulty=difficulty, unlocked=(difficulty == 0))
+                saved_mode = False  # TODO load saved game
+                level = Level(
+                    mode='lmode', 
+                    letter_set=letter_set, 
+                    difficulty=difficulty, 
+                    unlocked=(difficulty == 0 or saved_mode or self.godmode))
                 self.level_buttons[lvl_button] = level
                 ALL_LEVELS[('lmode', letter_set, difficulty)] = {'level':level, 'button':lvl_button}
                 if not level.unlocked:
@@ -157,6 +177,9 @@ class LmodeMainScreen(Screen):
     def to_level(self, button):
         level = self.level_buttons[button]
         self.enter_level(level)
+    
+    def call_help(self, button):
+        print('help!')
 
     def on_key_down(self, keycode, modifiers):
         print(keycode[1])
@@ -170,6 +193,8 @@ class LmodeMainScreen(Screen):
         w, h = win_size
         self.intro_button.size = (0.35*w, 0.15*h)
         self.intro_button.pos = (0.05*w, 0.05*h)
+        self.help_button.size = (metrics.dp(40), metrics.dp(40))
+        self.help_button.pos = (0.95*w, 0.05*h)
 
 
 class LearningScreen(Screen):
@@ -247,6 +272,7 @@ class LearningScreen(Screen):
             level_update = self.level.on_update(frame_info)
             #TODO better way of doing this
             if level_update == "level complete":
+                ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty)]['button'].background_normal = 'assets/button{}_down.png'.format(str(self.level.letter_set))
                 self.unlock_next_levels()
                 self.switch_to('lmode_main')
             elif level_update:
@@ -328,7 +354,7 @@ class LearningScreen(Screen):
         self.webcam_display.pos = (0.5*w, 0.3*h)
 
 class GmodeMainScreen(Screen):
-    def __init__(self, enter_level, **kwargs):
+    def __init__(self, enter_level, channel, **kwargs):
         super(GmodeMainScreen, self).__init__(**kwargs)
         
         '''
@@ -349,7 +375,7 @@ class GmodeMainScreen(Screen):
                                    font_name="AtlantisInternational")
         self.canvas.add(self.explain1)
         '''
-
+        self.godmode = channel
         self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
         self.info.text = "Game Mode\n"
 
@@ -359,7 +385,6 @@ class GmodeMainScreen(Screen):
         # level transition function
         self.enter_level = enter_level
 
-        # buttons - one to switch back to the intro screen, and one to switch to the end screen.
         self.intro_button = Button(
 
             text='Return to Main Screen', 
@@ -371,6 +396,16 @@ class GmodeMainScreen(Screen):
             background_down = 'assets/button_down.png')
         self.intro_button.bind(on_release= lambda x: self.switch_to('intro'))
         self.add_widget(self.intro_button)
+        
+        self.help_button = Button(
+            text="", 
+            background_normal="assets/help.png", 
+            background_down="assets/help_down.png",
+            size=(metrics.dp(40), metrics.dp(40)), 
+            pos=(0.95*w, 0.05*h))
+        self.help_button.bind(
+            on_release=self.call_help)
+        self.add_widget(self.help_button)
         
         # self.grid = GridLayout(cols=4, spacing=0, padding=0, size_hint_y = None)
         # self.grid.bind(minimum_height=self.grid.setter('height'))
@@ -389,6 +424,7 @@ class GmodeMainScreen(Screen):
                     font_name="AtlantisInternational", 
                     size=(0.2*w, 0.15*h), 
                     pos=(0.2*letter_set*w+0.1*w, 0.2*(3-difficulty)*h+0.1*h),
+                    halign = 'center',
                     background_normal = 'assets/button{}.png'.format(str(letter_set)),
                     background_down = 'assets/button{}_down.png'.format(str(letter_set)),
                     # background_locked_normal= 'assets/button{}.png'.format(str(letter_set)),
@@ -400,7 +436,13 @@ class GmodeMainScreen(Screen):
                 # self.grid.add_widget(lvl_button)
                 self.add_widget(lvl_button)
                 
-                level = Level(mode='gmode', letter_set=letter_set, difficulty=difficulty, unlocked=True) # TODO temp unlock
+                saved_mode = False  # TODO load saved game
+                level = Level(
+                    mode='gmode', 
+                    letter_set=letter_set, 
+                    difficulty=difficulty, 
+                    unlocked=(saved_mode or self.godmode)
+                    )
                 self.level_buttons[lvl_button] = level
                 ALL_LEVELS[('gmode', letter_set, difficulty)] = {'level':level, 'button':lvl_button}
                 if not level.unlocked:
@@ -416,6 +458,9 @@ class GmodeMainScreen(Screen):
     def to_level(self, button):
         level = self.level_buttons[button]
         self.enter_level(level)
+    
+    def call_help(self, button):
+        print('help!')
 
     def on_key_down(self, keycode, modifiers):
         print(keycode[1])
@@ -429,6 +474,8 @@ class GmodeMainScreen(Screen):
         w, h = win_size
         self.intro_button.size = (0.35*w, 0.15*h)
         self.intro_button.pos = (0.05*w, 0.05*h)
+        self.help_button.size = (metrics.dp(40), metrics.dp(40))
+        self.help_button.pos = (0.95*w, 0.05*h)
 
 
 class GameScreen(Screen):
@@ -448,6 +495,9 @@ class GameScreen(Screen):
         self.info.text += "Spelled so far: {}\n".format(self.level.target[:self.level._cur_letter_idx])
 
         self.add_widget(self.info)
+        self.start_time = time.time() + 3
+        self.bartimer = TimerDisplay()
+        self.canvas.add(self.bartimer)
         
         # # Hint popup
         # self.popup = HelpPopup()
@@ -473,6 +523,11 @@ class GameScreen(Screen):
         self.guide_video_display = Rectangle(pos=(0.3*w, 0.3*h), size=(0.4*w, 0.3*h))
         # self.canvas.add(self.guide_video_display)
 
+    def on_enter(self):
+        # reset timer
+        self.start_time = time.time() + 3
+        self.bartimer.reset()
+    
     def on_exit(self):
         print('EXITING GAME SCREEN')
 
@@ -495,6 +550,12 @@ class GameScreen(Screen):
     #         self.popup.dismiss()
 
     def on_update(self):
+        # Update time
+        time_elapsed = time.time() - self.start_time
+        if self.bartimer.on_update(time_elapsed) == 'end of game':
+            print('game ended')
+            self.switch_to('transition')
+        
         # Update guide video display
         if self.guide_video:
             success, frame = self.guide_video.read()
@@ -526,6 +587,8 @@ class GameScreen(Screen):
             level_update = self.level.on_update(frame_info)
             #TODO better way of doing this
             if level_update == "level complete":
+                # fill in the button icon
+                ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty)]['button'].background_normal = 'assets/button{}_down.png'.format(str(self.level.letter_set))
                 self.unlock_next_levels()
                 self.switch_to('gmode_main')
         
@@ -555,6 +618,7 @@ class GameScreen(Screen):
         self.intro_button.pos = (0.05*w, 0.05*h)
         self.guide_video_display.pos = (0.3*w, 0.3*h)
         self.guide_video_display.size = (0.4*w,0.3*h)
+        self.bartimer.on_layout(win_size)
         # self.popup.redraw()
 
     # def on_enter(self):
@@ -591,7 +655,7 @@ class TransitionScreen(Screen):
         w, h = Window.size
 
         self.title = CLabelRect(cpos=(w/2, 3*h/4),
-                                text="ASLingo",
+                                text="TRANSITION",
                                 font_size=font_sz*1.8,
                                 font_name="AtlantisInternational")
         self.canvas.add(self.title)
@@ -627,3 +691,103 @@ class TransitionScreen(Screen):
         self.gmode_button.size = (0.5*w, 0.2*h)
         self.gmode_button.pos = (0.25*w, 0.15*h)
 
+class TimerDisplay(InstructionGroup):
+    def __init__(self):
+        super(TimerDisplay, self).__init__()
+        self.duration = 30.
+        self.start_x = Window.width*0.2
+        self.end_x = Window.width*.85
+        self.start_y = Window.height*.2
+        self.end_y = Window.height*.25
+        
+        # Initialize moving timer
+        self.color = Color(0,1,0) # start off green
+        self.bar = Rectangle(pos=(self.start_x, self.start_y), size=(self.end_x-self.start_x, self.end_y-self.start_y))
+        self.add(self.color)
+        self.add(self.bar)
+        
+        # Vertical borders
+        # self.add(Color(0, .5, .5/1.5))
+        self.border_left = Line(width=2)
+        self.border_mid = Line(width=2)
+        self.border_right = Line(width=2)
+        self.add(self.border_left)
+        self.add(self.border_right)
+        self.add(self.border_mid)
+        
+        # Horizontal borders
+        # self.add(Color(0.1, 1, 1/1.5))
+        self.border_bot = Line(width=2)
+        self.border_top = Line(width=2)
+        self.add(self.border_bot)
+        self.add(self.border_top)
+        
+        self.on_layout(Window.size)
+
+        
+        # self.nowbar = Line(width=2)
+        # self.add(Color(0, 0.7, 0.74/1.5))
+        # self.add(self.nowbar)
+        # self.gems = []
+        # self.added = False
+
+    # def getXPos(self, time):
+    #     # [start_x   .. <- |  end_x]
+    #     # throughout duration
+    #     t = self.end_x - (time / self.duration) * (self.end_x - self.start_x)
+    #     return t
+    
+    def reset(self):
+        # self.duration = duration
+        self.color.rgb = (0,1,0)
+        self.bar.size = (self.end_x-self.start_x, self.end_y-self.start_y)
+
+    def get_width(self, time):
+        t = (self.end_x - self.start_x) * (1 - time / self.duration)
+        return t
+
+    # def addNote(self, time,):
+    #     newgem = Gem(self.getXPos(time))
+    #     self.add(newgem)
+    #     self.gems.append(newgem)
+
+    def on_update(self, time_elapsed):
+        if time_elapsed > self.duration:
+            return 'end of game'
+            # time_elapsed %= self.duration
+
+        if time_elapsed >=0:
+            # self.nowbar.points = [(self.getXPos(time_elapsed), self.start_y), (self.getXPos(time_elapsed), self.end_y),]
+            # self.bar.pos = (self.getXPos(time_elapsed), self.start_y)
+            self.bar.size = (self.get_width(time_elapsed), self.end_y-self.start_y)
+        
+        # TODO more efficient way than reassigning every time
+        if time_elapsed > self.duration*3/4:
+            print('quarter')
+            self.color.rgb = (1,0,0)
+            
+        elif time_elapsed > self.duration/2:
+            print('halfway')
+            self.color.rgb = (1,1,0)
+        
+
+    def on_layout(self, win_size):
+        self.start_x = win_size[0]*0.2
+        self.end_x = win_size[0]*.85
+        self.start_y = win_size[1]*.2
+        self.end_y = win_size[1]*.25
+        # width, height = win_size
+        # self.border_left.points = [(width*0.2, height*.9,) ,(width*.2, height*.95)]
+        # self.border_right.points=[(width*0.85, height*.9,), (width*.85, height*.95)]
+        # self.border_mid.points=[(width*0.525, height*.9,), (width*.525, height*.95)]
+        # # self.border_h4.points = [(width*0.2, height*.925,), (width*.85, height*.925)]
+        # self.border_bot.points = [(width*0.2, height*.9,), (width*.85, height*.9)]
+        # self.border_top.points = [(width*0.2, height*.95,), (width*.85, height*.95)]
+        # for gem in self.gems:
+        #     gem.on_layout(win_size)
+        self.bar.pos=(self.start_x, self.start_y)
+        self.border_left.points = [(self.start_x, self.start_y) ,(self.start_x, self.end_y)]
+        self.border_mid.points=[((self.start_x + self.end_x)/2, self.start_y), ((self.start_x + self.end_x)/2, self.end_y)]
+        self.border_right.points=[(self.end_x, self.start_y), (self.end_x, self.end_y)]
+        self.border_bot.points = [(self.start_x, self.start_y), (self.end_x, self.start_y)]
+        self.border_top.points = [(self.start_x, self.end_y,), (self.end_x, self.end_y)]

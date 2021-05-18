@@ -100,4 +100,5 @@ class Level():
                     print('FINISHED WORD')
                     self._cur_letter_idx = 0
                     return self.set_target(self.get_next_target())
+                # TODO game finish condition
 
