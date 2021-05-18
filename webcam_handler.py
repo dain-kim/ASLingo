@@ -1,10 +1,11 @@
-import sys
+import os, sys
 import cv2
 import numpy as np
 import pandas as pd
 import string
 import mediapipe as mp
 import pickle
+from zipfile import ZipFile
 from utils import mp_process_image, generate_dataframe, annotate_image, pred_class_to_letter
 
 
@@ -123,12 +124,17 @@ class WebcamHandler():
         #         print('esc')
         #         break
     
-    def evaluate_model(self, show=True):
+    def evaluate_model(self, show=False):
         '''
         A helper function for evaluating the recognition model's performance.
         It uses pre-recorded videos in test_webcam_data to test each letter.
         The videos in the test data were not used to train the model.
         '''
+        if not os.path.isdir('test_webcam_data'):
+            print('Unzipping test data...')
+            with ZipFile('test_webcam_data.zip','r') as zipobj:
+                zipobj.extractall()
+
         accuracy = 0
         for i in string.ascii_uppercase:
             print('input:', i)
@@ -257,4 +263,4 @@ class StaticSignProcessor():
 if __name__ == "__main__":
     webcam = WebcamHandler()
     # webcam.stream_webcam()
-    webcam.evaluate_model()
+    webcam.evaluate_model(show=(len(sys.argv) > 1 and sys.argv[1] == '--show'))
