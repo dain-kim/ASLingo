@@ -14,8 +14,8 @@ with open('saved_model.pkl', 'rb') as f:
 
 
 class WebcamHandler():
-    def __init__(self):
-        self.cap = cv2.VideoCapture(0)
+    def __init__(self, vid_src=0):
+        self.cap = cv2.VideoCapture(vid_src)
         self.image = None
         self.processor = StaticSignProcessor((126,))
         self.timestamps = []
@@ -91,6 +91,8 @@ class WebcamHandler():
                 score = str(round(max(pred_prob),2))
                 # print('PREDICTED:', prediction, score)
 
+        # if blur:
+        #     image = cv2.blur(image, (25,25))
         if self.hand_results:
             image = annotate_image(image, self.hand_results[-1], self.pose_results[-1])
         else:
@@ -112,6 +114,49 @@ class WebcamHandler():
             if cv2.waitKey(5) & 0xFF == 27:
                 print('esc')
                 break
+        # out = self.get_next_frame()
+        # while out:
+        #     image,_,_ = out
+        #     cv2.imshow('webcam', image)
+        #     out = self.get_next_frame()
+        #     if cv2.waitKey(5) & 0xFF == 27:
+        #         print('esc')
+        #         break
+    
+    def evaluate_model(self, show=True):
+        '''
+        A helper function for evaluating the recognition model's performance.
+        It uses pre-recorded videos in test_webcam_data to test each letter.
+        The videos in the test data were not used to train the model.
+        '''
+        accuracy = 0
+        for i in string.ascii_uppercase:
+            print('input:', i)
+            tmp = []
+            vid_src = f"test_webcam_data/{i}.mp4"
+            self.cap = cv2.VideoCapture(vid_src)
+            while self.cap.isOpened():
+                try:
+                    image, pred, score = self.get_next_frame()
+                    if pred not in ('','No hands detected'):
+                        tmp.append(pred.replace('LETTER-',''))
+                    if show:
+                        cv2.imshow('webcam', image)
+                        if cv2.waitKey(5) & 0xFF == 27:
+                            print('esc')
+                            break
+                except:
+                    break
+            final_pred = max(set(tmp), key = tmp.count)
+            print('prediction:', final_pred)
+            if i == final_pred:
+                print('CORRECT')
+                accuracy += 1
+            else:
+                print('INCORRECT')
+        
+        print('\n\nFinal Accuracy: {}/26 ({}%)'.format(str(accuracy), round(accuracy/26, 2)))
+            
 
 # TODO move this to a separate script
 class StaticSignProcessor():
@@ -211,4 +256,5 @@ class StaticSignProcessor():
 
 if __name__ == "__main__":
     webcam = WebcamHandler()
-    webcam.stream_webcam()
+    # webcam.stream_webcam()
+    webcam.evaluate_model()
