@@ -21,7 +21,7 @@ set_idx_to_letters = {0: 'ABCDEFG', 1: 'HIJKLMN', 2: 'OPQRST', 3: 'UVWXYZ'}
 ALL_LEVELS = {}
 
 def gen_button_text(mode, letter_set, difficulty):
-    '''helper function for the LModeMainScreen to get the correct button text'''
+    '''helper function for the MainScreen to get the correct level button text'''
     letters = set_idx_to_letters[letter_set]
     if mode == 'lmode':
         if difficulty == 0:
@@ -39,6 +39,15 @@ def gen_button_text(mode, letter_set, difficulty):
             return '{}-{}\nlong words'.format('A',letters[-1])
 
 class IntroScreen(Screen):
+    '''
+    Intro Screen.
+    |---------------------|
+    |        title        |
+    |                     |
+    |        lmode        |
+    |        gmode        |
+    |---------------------|
+    '''
     def __init__(self, **kwargs):
         super(IntroScreen, self).__init__(**kwargs)
 
@@ -47,7 +56,7 @@ class IntroScreen(Screen):
         self.title = CLabelRect(cpos=(w/2, 3*h/4),
                                 text="ASLingo",
                                 font_size=font_sz*1.8,
-                                font_name="AtlantisInternational")
+                                font_name="assets/AtlantisInternational")
         self.canvas.add(self.title)
 
         # Buttons for entering learning/game main screen
@@ -66,16 +75,31 @@ class IntroScreen(Screen):
         self.gmode_button.on_layout(win_size)
 
 
-class LmodeMainScreen(Screen):
-    def __init__(self, enter_level, channel, **kwargs):
-        super(LmodeMainScreen, self).__init__(**kwargs)
+class MainScreen(Screen):
+    '''
+    Main Screen.
+    |---------------------|
+    |mode                 |
+    |    O   O   O   O    |
+    |    O   O   O   O    |
+    |    O   O   O   O    |
+    |return           help|
+    |---------------------|
+    '''
+    def __init__(self, enter_level, channel, mode, **kwargs):
+        super(MainScreen, self).__init__(**kwargs)
+        
         # level transition function
         self.enter_level = enter_level
         self.godmode = channel
+        self.mode = mode
         
-        # Main screen text
-        self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
-        self.info.text = "Learning Mode\n"
+        # Mode text
+        self.info = topleft_label(font_size=font_sz, font_name="assets/AtlantisInternational")
+        if self.mode == 'lmode':
+            self.info.text = "Learning Mode\n"
+        elif self.mode == 'gmode':
+            self.info.text = "Game Mode\n"
         self.add_widget(self.info)
 
         # Return button
@@ -84,10 +108,9 @@ class LmodeMainScreen(Screen):
         self.add_widget(self.intro_button)
         
         # Help button
-        self.help_button = HelpButton()
+        self.help_button = HelpButton(self.mode)
         self.help_button.bind(on_release=self.call_help)
         self.add_widget(self.help_button)
-        
         
         # Level button for each level
         self.level_buttons = {}
@@ -96,26 +119,23 @@ class LmodeMainScreen(Screen):
         for letter_set in range(4):
             for difficulty in range(3):
                 level_button = LevelButton(
-                    gen_button_text('lmode', letter_set, difficulty), 
+                    gen_button_text(self.mode, letter_set, difficulty), 
                     difficulty, 
                     letter_set)
                 level_button.bind(on_release=self.to_level)
                 self.add_widget(level_button)
-                # self.grid.add_widget(level_button)
                 
-                # only first difficulty is unlocked in the beginning
                 saved_mode = False  # TODO load saved game
+                # in learning mode, only first difficulty is unlocked in the beginning
                 level = Level(
-                    mode='lmode', 
+                    mode=self.mode, 
                     letter_set=letter_set, 
                     difficulty=difficulty, 
-                    unlocked=(difficulty == 0 or saved_mode or self.godmode))
+                    unlocked=(saved_mode or self.godmode or (self.mode,difficulty) == ('lmode',0)))
                 self.level_buttons[level_button] = level
-                ALL_LEVELS[('lmode', letter_set, difficulty)] = {'level':level, 'button':level_button}
+                ALL_LEVELS[(self.mode, letter_set, difficulty)] = {'level':level, 'button':level_button}
                 if not level.unlocked:
                     level_button.disabled = True
-        
-        # self.add_widget(self.grid)
 
     def to_level(self, button):
         level = self.level_buttons[button]
@@ -123,13 +143,21 @@ class LmodeMainScreen(Screen):
     
     def call_help(self, button):
         print('help!')
+        if button.active:
+            self.canvas.remove(button.overlay)
+        else:
+            self.canvas.add(button.overlay)
+        
 
     def on_key_down(self, keycode, modifiers):
         print(keycode[1])
 
     def on_update(self):
         # Update screen text
-        self.info.text = "Learning Mode\n"
+        if self.mode == 'lmode':
+            self.info.text = "Learning Mode\n"
+        elif self.mode == 'gmode':
+            self.info.text = "Game Mode\n"
 
     def on_layout(self, win_size):
         resize_topleft_label(self.info)
@@ -140,24 +168,36 @@ class LmodeMainScreen(Screen):
 
 
 class LearningScreen(Screen):
+    '''
+    Learning Screen.
+    |---------------------|
+    |text                 |
+    |----------|----------|
+    |guidevideo|  webcam  |
+    |----------|----------|
+    |return               |
+    |---------------------|
+    '''
     def __init__(self, webcam, **kwargs):
         super(LearningScreen, self).__init__(**kwargs)
         self.webcam = webcam
-        
         self.level = Level(mode='lmode',letter_set=0,difficulty=0)
         self.guide_video = cv2.VideoCapture(self.level.vid_src)
 
-        self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
+        # Level text
+        self.info = topleft_label(font_size=font_sz, font_name="assets/AtlantisInternational")
         self.info.text = set_idx_to_letters[self.level.letter_set] + '\n'
         self.info.text += "Use the keyboard to see a different letter\n"
-        self.info.text += "Letter: {}\n".format(self.level.target)
-
+        # self.info.text += "Letter: {}\n".format(self.level.target)
+        self.info.text += "Letter: "
         self.add_widget(self.info)
-
+        
+        # Return button
         self.intro_button = ReturnToButton('Return to Learning Mode')
         self.intro_button.bind(on_release=lambda x: self.switch_to('lmode_main'))
         self.add_widget(self.intro_button)
 
+        # Guide video and webcam displays
         w, h = Window.size
         # TODO smarter way of scaling webcam display to preserve 16:9 ratio
         self.webcam_display = Rectangle(pos=(0.5*w, 0.3*h), size=(0.5*w,0.375*h))
@@ -284,72 +324,6 @@ class LearningScreen(Screen):
         w,h = Window.size
         self.webcam_display.pos = (0.5*w, 0.3*h)
 
-class GmodeMainScreen(Screen):
-    def __init__(self, enter_level, channel, **kwargs):
-        super(GmodeMainScreen, self).__init__(**kwargs)
-
-        # level transition function
-        self.enter_level = enter_level
-        self.godmode = channel
-        
-        self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
-        self.info.text = "Game Mode\n"
-        self.add_widget(self.info)
-
-        self.intro_button = ReturnToButton('Return to Main Screen')
-        self.intro_button.bind(on_release=lambda x: self.switch_to('intro'))
-        self.add_widget(self.intro_button)
-        
-        self.help_button = HelpButton()
-        self.help_button.bind(on_release=self.call_help)
-        self.add_widget(self.help_button)
-        
-        # Add button for each level
-        self.level_buttons = {}  # button_to_level
-        
-        # Four rows of three consecutive levels
-        for letter_set in range(4):
-            for difficulty in range(3):
-                level_button = LevelButton(
-                    gen_button_text('gmode',letter_set,difficulty), 
-                    difficulty, 
-                    letter_set)
-                level_button.bind(on_release=self.to_level)
-                self.add_widget(level_button)
-                
-                saved_mode = False  # TODO load saved game
-                level = Level(
-                    mode='gmode', 
-                    letter_set=letter_set, 
-                    difficulty=difficulty, 
-                    unlocked=(saved_mode or self.godmode)
-                    )
-                self.level_buttons[level_button] = level
-                ALL_LEVELS[('gmode', letter_set, difficulty)] = {'level':level, 'button':level_button}
-                if not level.unlocked:
-                    level_button.disabled = True
-
-    def to_level(self, button):
-        level = self.level_buttons[button]
-        self.enter_level(level)
-    
-    def call_help(self, button):
-        print('help!')
-
-    def on_key_down(self, keycode, modifiers):
-        print(keycode[1])
-
-    def on_update(self):
-        # Update screen text
-        self.info.text = "Game Mode\n"
-
-    def on_layout(self, win_size):
-        resize_topleft_label(self.info)
-        self.intro_button.on_layout(win_size)
-        self.help_button.on_layout(win_size)
-        for level_button in self.level_buttons.keys():
-            level_button.on_layout(win_size)
-
 
 class GameScreen(Screen):
     def __init__(self, webcam, send_summary, **kwargs):
@@ -360,7 +334,7 @@ class GameScreen(Screen):
         self.level = Level(mode='gmode',letter_set=0,difficulty=0)
         self.guide_video = None
 
-        self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
+        self.info = topleft_label(font_size=font_sz, font_name="assets/AtlantisInternational")
         self.info.text = set_idx_to_letters[self.level.letter_set] + '\n'
         self.info.text += "Spell out the following word\n"
         self.info.text += "Press spacebar to skip, h to see hint\n"
@@ -509,31 +483,31 @@ class TransitionScreen(Screen):
         self.title = CLabelRect(cpos=(w/2, 3*h/4),
                                 text="Game Summary",
                                 font_size=font_sz,
-                                font_name="AtlantisInternational")
+                                font_name="assets/AtlantisInternational")
         self.canvas.add(self.title)
-        self.stats = CLabelRect(cpos=(w/2, h/2),
-                                text="default",
+        self.stats = CLabelRect(cpos=(w/2, 0.6*h),
+                                text="",
                                 font_size=font_sz/2,
-                                font_name="AtlantisInternational")
+                                font_name="assets/AtlantisInternational")
         self.canvas.add(self.stats)
         
         self.game_summary = ""
         
         self.stars = [
             CRectangle(
-                cpos=(0.4*w, 0.3*h),
+                cpos=(0.4*w, 0.4*h),
                 csize=((metrics.dp(70), metrics.dp(70))),
-                source='assets/star.png'
+                source='assets/rainbow_star.png'
             ),
             CRectangle(
-                cpos=(0.5*w, 0.3*h),
+                cpos=(0.5*w, 0.4*h),
                 csize=((metrics.dp(70), metrics.dp(70))),
-                source='assets/star.png'
+                source='assets/rainbow_star.png'
             ),
             CRectangle(
-                cpos=(0.6*w, 0.3*h),
+                cpos=(0.6*w, 0.4*h),
                 csize=((metrics.dp(70), metrics.dp(70))),
-                source='assets/star.png'
+                source='assets/rainbow_star.png'
             )
         ]
         for star in self.stars:
@@ -547,9 +521,9 @@ class TransitionScreen(Screen):
         self.gmode_button.on_layout(win_size)
         w, h = win_size
         self.title.set_cpos((w/2, 3*h/4))
-        self.stats.set_cpos((w/2, h/2))
+        self.stats.set_cpos((w/2, 0.6*h))
         for i,star in enumerate(self.stars):
-            star.pos = ((0.4+0.1*i)*w, 0.3*h)
+            star.pos = ((0.4+0.1*i)*w, 0.4*h)
     
     def on_enter(self):
         print('transition')
@@ -585,7 +559,7 @@ class TimerDisplay(InstructionGroup):
         self.remaining_time = CLabelRect(cpos=(self.end_x + 50, self.start_y),
                                 text=str(int(self.duration)),
                                 font_size=(self.end_y-self.start_y)/2,
-                                font_name="AtlantisInternational")
+                                font_name="assets/AtlantisInternational")
         self.add(self.remaining_time)
         
         # Vertical borders

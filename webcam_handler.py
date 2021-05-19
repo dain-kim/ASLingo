@@ -13,7 +13,7 @@ from utils import mp_process_image, generate_dataframe, annotate_image, pred_cla
 with open('saved_model.pkl', 'rb') as f:
     model = pickle.load(f)
 
-
+# TODO change to generic video src handler
 class WebcamHandler():
     def __init__(self, vid_src=0):
         self.cap = cv2.VideoCapture(vid_src)
