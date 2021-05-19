@@ -4,6 +4,7 @@ from kivy.graphics.texture import Texture
 from kivy.graphics import Color, Line, Rectangle
 from kivy.graphics.instructions import InstructionGroup
 from kivy.core.image import Image
+from kivy.uix.gridlayout import GridLayout
 from kivy.uix.button import Button
 from kivy.core.window import Window
 from kivy import metrics
@@ -12,6 +13,7 @@ import string
 import numpy as np
 from levels import Level
 import time
+from config import ModeButton, LevelButton, ReturnToButton, HelpButton
 
 font_sz = metrics.dp(50)
 button_sz = metrics.dp(100)
@@ -49,118 +51,57 @@ class IntroScreen(Screen):
         self.canvas.add(self.title)
 
         # Buttons for entering learning/game main screen
-        self.lmode_button = Button(
-            text='Learning Mode', 
-            font_name="AtlantisInternational", 
-            font_size=font_sz, 
-            size=(0.45*w, 0.25*h), 
-            pos=(0.25*w, 0.3*h),
-            background_normal = 'assets/button.png',
-            background_down = 'assets/button_down.png'
-            )
-        self.lmode_button.bind(on_release= lambda x: self.switch_to('lmode_main'))
+        self.lmode_button = ModeButton('Learning Mode')
+        self.lmode_button.bind(on_release=lambda x: self.switch_to('lmode_main'))
         self.add_widget(self.lmode_button)
 
-        self.gmode_button = Button(
-            text='Game Mode', 
-            font_name="AtlantisInternational", 
-            font_size=font_sz, 
-            size=(0.45*w, 0.25*h), 
-            pos=(0.25*w, 0.05*h),
-            background_normal = 'assets/button.png',
-            background_down = 'assets/button_down.png'
-            )
-        self.gmode_button.bind(on_release= lambda x: self.switch_to('gmode_main'))
+        self.gmode_button = ModeButton('Game Mode')
+        self.gmode_button.bind(on_release=lambda x: self.switch_to('gmode_main'))
         self.add_widget(self.gmode_button)
 
     def on_layout(self, win_size):
         w, h = win_size
         self.title.set_cpos((w/2, 3*h/4))
-        self.lmode_button.size = (0.45*w, 0.25*h)
-        self.lmode_button.pos = (0.25*w, 0.3*h)
-        self.gmode_button.size = (0.45*w, 0.25*h)
-        self.gmode_button.pos = (0.25*w, 0.05*h)
+        self.lmode_button.on_layout(win_size)
+        self.gmode_button.on_layout(win_size)
+
 
 class LmodeMainScreen(Screen):
     def __init__(self, enter_level, channel, **kwargs):
         super(LmodeMainScreen, self).__init__(**kwargs)
-        
+        # level transition function
+        self.enter_level = enter_level
         self.godmode = channel
-        w, h = Window.size
-        # Add background image
-        # background = Image('assets/background.png')
-        # self.background_image = CRectangle(cpos=(w * .5, h * .9), csize=(w * 2, h * 1.8), texture=background.texture)
-        # self.canvas.add(self.background_image)
-        # # Add background sound
-        # self.audio = Audio(2)
-        # self.mixer = Mixer()
-        # self.audio.set_generator(self.mixer)
-        # self.background_audio = WaveGenerator(WaveFile("./data/howto.wav"), loop=True)
-        # self.mixer.add(self.background_audio)
-        # self.bg.pause()
-        # # Add graphic text
-        # self.explain1 = CLabelRect(cpos=(w/2, 0.8*h),
-        #                            text="Choose a level",
-        #                         font_size=36,
-        #                            font_name="AtlantisInternational")
-        # self.canvas.add(self.explain1)
-
+        
+        # Main screen text
         self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
         self.info.text = "Learning Mode\n"
         self.add_widget(self.info)
 
-        # level transition function
-        self.enter_level = enter_level
-
-        self.intro_button = Button(
-            text='Return to Main Screen', 
-            font_size=font_sz/2, 
-            font_name="AtlantisInternational", 
-            size=(0.35*w, 0.15*h),
-            pos=(0.05*w, 0.05*h),
-            background_normal = 'assets/button.png',
-            background_down = 'assets/button_down.png')
-        self.intro_button.bind(on_release= lambda x: self.switch_to('intro'))
+        # Return button
+        self.intro_button = ReturnToButton('Return to Main Screen')
+        self.intro_button.bind(on_release=lambda x: self.switch_to('intro'))
         self.add_widget(self.intro_button)
         
-        self.help_button = Button(
-            text="", 
-            background_normal="assets/help.png", 
-            background_down="assets/help_down.png",
-            size=((metrics.dp(25), metrics.dp(25))), 
-            pos=(0.9*w, 0.1*h))
-        self.help_button.bind(
-            on_release=self.call_help)
+        # Help button
+        self.help_button = HelpButton()
+        self.help_button.bind(on_release=self.call_help)
         self.add_widget(self.help_button)
         
-        # self.grid = GridLayout(cols=4, spacing=0, padding=0, size_hint_y = None)
-        # self.grid.bind(minimum_height=self.grid.setter('height'))
         
-        # Add button for each level
-        self.level_buttons = {}  # button_to_level
-        # self.levels = {}
+        # Level button for each level
+        self.level_buttons = {}
         
         # Four sets of letters, three difficulties
         for letter_set in range(4):
             for difficulty in range(3):
-                lvl_button = Button(
-                    text=gen_button_text('lmode', letter_set, difficulty), 
-                    font_size=font_sz/2., 
-                    font_name="AtlantisInternational", 
-                    size=(0.2*w, 0.15*h), 
-                    pos=(0.2*letter_set*w+0.1*w, 0.2*(3-difficulty)*h+0.1*h),
-                    halign = 'center',
-                    background_normal = 'assets/button{}.png'.format(str(letter_set)),
-                    background_down = 'assets/button{}_down.png'.format(str(letter_set)),
-                    # background_locked_normal= 'assets/button{}.png'.format(str(letter_set)),
-                    # background_locked_down = 'assets/button{}_down.png'.format(str(letter_set)),
-                    )
-                
-                    
-                lvl_button.bind(on_release=self.to_level)
-                lvl_button.background_disabled_normal = 'assets/button{}_disabled.png'.format(str(letter_set))
-                # self.grid.add_widget(lvl_button)
-                self.add_widget(lvl_button)
+                level_button = LevelButton(
+                    gen_button_text('lmode', letter_set, difficulty), 
+                    difficulty, 
+                    letter_set)
+                level_button.bind(on_release=self.to_level)
+                self.add_widget(level_button)
+                # self.grid.add_widget(level_button)
                 
                 # only first difficulty is unlocked in the beginning
                 saved_mode = False  # TODO load saved game
@@ -169,10 +110,12 @@ class LmodeMainScreen(Screen):
                     letter_set=letter_set, 
                     difficulty=difficulty, 
                     unlocked=(difficulty == 0 or saved_mode or self.godmode))
-                self.level_buttons[lvl_button] = level
-                ALL_LEVELS[('lmode', letter_set, difficulty)] = {'level':level, 'button':lvl_button}
+                self.level_buttons[level_button] = level
+                ALL_LEVELS[('lmode', letter_set, difficulty)] = {'level':level, 'button':level_button}
                 if not level.unlocked:
-                    lvl_button.disabled = True
+                    level_button.disabled = True
+        
+        # self.add_widget(self.grid)
 
     def to_level(self, button):
         level = self.level_buttons[button]
@@ -190,19 +133,17 @@ class LmodeMainScreen(Screen):
 
     def on_layout(self, win_size):
         resize_topleft_label(self.info)
-        w, h = win_size
-        self.intro_button.size = (0.35*w, 0.15*h)
-        self.intro_button.pos = (0.05*w, 0.05*h)
-        self.help_button.size = ((metrics.dp(25), metrics.dp(25)))
-        self.help_button.pos = (0.9*w, 0.1*h)
+        self.intro_button.on_layout(win_size)
+        self.help_button.on_layout(win_size)
+        for level_button in self.level_buttons.keys():
+            level_button.on_layout(win_size)
 
 
 class LearningScreen(Screen):
     def __init__(self, webcam, **kwargs):
         super(LearningScreen, self).__init__(**kwargs)
         self.webcam = webcam
-        # self.get_level = get_level
-        # self.level = self.get_level()
+        
         self.level = Level(mode='lmode',letter_set=0,difficulty=0)
         self.guide_video = cv2.VideoCapture(self.level.vid_src)
 
@@ -213,20 +154,11 @@ class LearningScreen(Screen):
 
         self.add_widget(self.info)
 
-        w, h = Window.size
-
-        # buttons - one to switch back to the intro screen, and one to switch to the end screen.
-        self.intro_button = Button(
-            text='Return to Learning Mode', 
-            font_size=font_sz/2, 
-            font_name="AtlantisInternational", 
-            size=(0.35*w, 0.15*h), 
-            pos=(0.05*w, 0.05*h),
-            background_normal = 'assets/button.png',
-            background_down = 'assets/button_down.png')
-        self.intro_button.bind(on_release= lambda x: self.switch_to('lmode_main'))
+        self.intro_button = ReturnToButton('Return to Learning Mode')
+        self.intro_button.bind(on_release=lambda x: self.switch_to('lmode_main'))
         self.add_widget(self.intro_button)
 
+        w, h = Window.size
         # TODO smarter way of scaling webcam display to preserve 16:9 ratio
         self.webcam_display = Rectangle(pos=(0.5*w, 0.3*h), size=(0.5*w,0.375*h))
         self.canvas.add(self.webcam_display)
@@ -236,10 +168,9 @@ class LearningScreen(Screen):
     def on_exit(self):
         print('EXITING LEARNING SCREEN')
 
-
     def on_key_down(self, keycode, modifiers):
         print(keycode[1])
-        if keycode[1] == '1':
+        if keycode[1] == '1': #TODO temp
             print('manual unlock')
             ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty)]['button'].background_normal = 'assets/button{}_down.png'.format(str(self.level.letter_set))
             self.unlock_next_levels()
@@ -306,12 +237,7 @@ class LearningScreen(Screen):
         self.webcam_display.size = (0.5*w,0.375*h)
         self.guide_video_display.pos = (0, 0.3*h)
         self.guide_video_display.size = (0.5*w,0.375*h)
-        self.intro_button.size = (0.35*w, 0.15*h)
-        self.intro_button.pos = (0.05*w, 0.05*h)
-
-    # def on_enter(self):
-    #     app_level = self.get_level()
-    #     self.set_level(app_level)
+        self.intro_button.on_layout(win_size)
 
     def set_level(self, level):
         self.level = level
@@ -361,85 +287,35 @@ class LearningScreen(Screen):
 class GmodeMainScreen(Screen):
     def __init__(self, enter_level, channel, **kwargs):
         super(GmodeMainScreen, self).__init__(**kwargs)
-        
-        '''
-        # Add background image
-        self.background_image = Image(source='level_select.png', pos_hint={'center_x': .5, 'center_y': .5}, size_hint_y=1, allow_stretch=False)
-        self.add_widget(self.background_image)
-        # Add background sound
-        self.audio = Audio(2)
-        self.mixer = Mixer()
-        self.audio.set_generator(self.mixer)
-        self.background_audio = WaveGenerator(WaveFile("./data/howto.wav"), loop=True)
-        self.mixer.add(self.background_audio)
-        self.bg.pause()
-        # Add graphic text
-        self.explain1 = CLabelRect(cpos=(w/2, 0.8*h),
-                                   text="Choose a level",
-                                font_size=36,
-                                   font_name="AtlantisInternational")
-        self.canvas.add(self.explain1)
-        '''
-        self.godmode = channel
-        self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
-        self.info.text = "Game Mode\n"
 
-        self.add_widget(self.info)
-
-        w, h = Window.size
         # level transition function
         self.enter_level = enter_level
+        self.godmode = channel
+        
+        self.info = topleft_label(font_size=font_sz, font_name="AtlantisInternational")
+        self.info.text = "Game Mode\n"
+        self.add_widget(self.info)
 
-        self.intro_button = Button(
-
-            text='Return to Main Screen', 
-            font_size=font_sz/2, 
-            font_name="AtlantisInternational", 
-            size=(0.35*w, 0.15*h), 
-            pos=(0.05*w, 0.05*h),
-            background_normal = 'assets/button.png',
-            background_down = 'assets/button_down.png')
-        self.intro_button.bind(on_release= lambda x: self.switch_to('intro'))
+        self.intro_button = ReturnToButton('Return to Main Screen')
+        self.intro_button.bind(on_release=lambda x: self.switch_to('intro'))
         self.add_widget(self.intro_button)
         
-        self.help_button = Button(
-            text="", 
-            background_normal="assets/help.png", 
-            background_down="assets/help_down.png",
-            size=((metrics.dp(25), metrics.dp(25))), 
-            pos=(0.9*w, 0.1*h))
-        self.help_button.bind(
-            on_release=self.call_help)
+        self.help_button = HelpButton()
+        self.help_button.bind(on_release=self.call_help)
         self.add_widget(self.help_button)
-        
-        # self.grid = GridLayout(cols=4, spacing=0, padding=0, size_hint_y = None)
-        # self.grid.bind(minimum_height=self.grid.setter('height'))
         
         # Add button for each level
         self.level_buttons = {}  # button_to_level
-        # self.unlocked = []
         
         # Four rows of three consecutive levels
         for letter_set in range(4):
             for difficulty in range(3):
-                lvl_button = Button(
-
-                    text=gen_button_text('gmode',letter_set,difficulty), 
-                    font_size=font_sz/2., 
-                    font_name="AtlantisInternational", 
-                    size=(0.2*w, 0.15*h), 
-                    pos=(0.2*letter_set*w+0.1*w, 0.2*(3-difficulty)*h+0.1*h),
-                    halign = 'center',
-                    background_normal = 'assets/button{}.png'.format(str(letter_set)),
-                    background_down = 'assets/button{}_down.png'.format(str(letter_set)),
-                    # background_locked_normal= 'assets/button{}.png'.format(str(letter_set)),
-                    # background_locked_down = 'assets/button{}_down.png'.format(str(letter_set)),
-                    )
-                    
-                lvl_button.bind(on_release=self.to_level)
-                lvl_button.background_disabled_normal = 'assets/button{}_disabled.png'.format(str(letter_set))
-                # self.grid.add_widget(lvl_button)
-                self.add_widget(lvl_button)
+                level_button = LevelButton(
+                    gen_button_text('gmode',letter_set,difficulty), 
+                    difficulty, 
+                    letter_set)
+                level_button.bind(on_release=self.to_level)
+                self.add_widget(level_button)
                 
                 saved_mode = False  # TODO load saved game
                 level = Level(
@@ -448,10 +324,10 @@ class GmodeMainScreen(Screen):
                     difficulty=difficulty, 
                     unlocked=(saved_mode or self.godmode)
                     )
-                self.level_buttons[lvl_button] = level
-                ALL_LEVELS[('gmode', letter_set, difficulty)] = {'level':level, 'button':lvl_button}
+                self.level_buttons[level_button] = level
+                ALL_LEVELS[('gmode', letter_set, difficulty)] = {'level':level, 'button':level_button}
                 if not level.unlocked:
-                    lvl_button.disabled = True
+                    level_button.disabled = True
 
     def to_level(self, button):
         level = self.level_buttons[button]
@@ -469,11 +345,10 @@ class GmodeMainScreen(Screen):
 
     def on_layout(self, win_size):
         resize_topleft_label(self.info)
-        w, h = win_size
-        self.intro_button.size = (0.35*w, 0.15*h)
-        self.intro_button.pos = (0.05*w, 0.05*h)
-        self.help_button.size = ((metrics.dp(25), metrics.dp(25)))
-        self.help_button.pos = (0.9*w, 0.1*h)
+        self.intro_button.on_layout(win_size)
+        self.help_button.on_layout(win_size)
+        for level_button in self.level_buttons.keys():
+            level_button.on_layout(win_size)
 
 
 class GameScreen(Screen):
@@ -482,8 +357,6 @@ class GameScreen(Screen):
         self.webcam = webcam
         # transition function for sending game summary
         self.send_summary = send_summary
-        # self.get_level = get_level
-        # self.level = self.get_level()
         self.level = Level(mode='gmode',letter_set=0,difficulty=0)
         self.guide_video = None
 
@@ -503,20 +376,11 @@ class GameScreen(Screen):
         # self.popup = HelpPopup()
         # self.add_widget(self.popup)
 
-        w, h = Window.size
-
-        # buttons - one to switch back to the intro screen, and one to switch to the end screen.
-        self.gmode_button = Button(
-            text='Return to Game Mode', 
-            font_size=font_sz/2, 
-            font_name="AtlantisInternational", 
-            size=(0.35*w, 0.15*h), 
-            pos=(0.05*w, 0.05*h),
-            background_normal = 'assets/button.png',
-            background_down = 'assets/button_down.png')
-        self.gmode_button.bind(on_release= lambda x: self.switch_to('gmode_main'))
+        self.gmode_button = ReturnToButton('Return to Game Mode')
+        self.gmode_button.bind(on_release=lambda x: self.switch_to('gmode_main'))
         self.add_widget(self.gmode_button)
 
+        w, h = Window.size
         # TODO smarter way of scaling webcam display to preserve 16:9 ratio
         self.webcam_display = Rectangle(pos=(0.3*w, 0.3*h), size=(0.4*w,0.3*h))
         self.canvas.add(self.webcam_display)
@@ -526,7 +390,8 @@ class GameScreen(Screen):
     def on_enter(self):
         # reset timer
         self.start_time = time.time() + 3
-        self.bartimer.reset()
+        duration = 30. + 15 * (self.level.difficulty)
+        self.bartimer.reset(duration)
         if self.guide_video:
             self.guide_video.release()
             self.guide_video = None
@@ -614,54 +479,20 @@ class GameScreen(Screen):
 
     def on_layout(self, win_size):
         resize_topleft_label(self.info)
+        self.gmode_button.on_layout(win_size)
+        
         w, h = win_size
-        # if self.level.difficulty == 0:
-        #     if self.guide_video_display not in self.canvas.children:
-        #         self.canvas.add(self.guide_video_display)
-        #     self.uncenter_webcam()
-        # else:
-        #     if self.guide_video_display in self.canvas.children:
-        #         print('removing guide video display')
-        #         self.canvas.remove(self.guide_video_display)
-        #     self.center_webcam()
         self.webcam_display.pos = (0.3*w, 0.3*h)
         self.webcam_display.size = (0.4*w,0.3*h)
-        self.gmode_button.size = (0.35*w, 0.15*h)
-        self.gmode_button.pos = (0.05*w, 0.05*h)
         self.guide_video_display.pos = (0.3*w, 0.3*h)
         self.guide_video_display.size = (0.4*w,0.3*h)
         self.bartimer.on_layout(win_size)
         # self.popup.redraw()
 
-    # def on_enter(self):
-    #     app_level = self.get_level()
-    #     self.set_level(app_level)
-
     def set_level(self, level):
         self.level = level
-        # if self.level.difficulty == 0:
-        #     if self.guide_video_display not in self.canvas.children:
-        #         self.canvas.add(self.guide_video_display)
-        #     self.uncenter_webcam()
-        #     self.guide_video = cv2.VideoCapture(self.level.vid_src)
-        # else:
-        #     if self.guide_video:
-        #         self.guide_video.release()
-        #     self.guide_video = None
-        #     if self.guide_video_display in self.canvas.children:
-        #         self.canvas.remove(self.guide_video_display)
-        #     self.center_webcam()
-
-    # def center_webcam(self):
-    #     w,h = Window.size
-    #     self.webcam_display.pos = (0.25*w, 0.3*h)
-
-    # def uncenter_webcam(self):
-    #     w,h = Window.size
-    #     self.webcam_display.pos = (0.5*w, 0.3*h)
     
     def unlock_next_levels(self):
-        print('unlocking levels after', self.level.mode, self.level.letter_set, self.level.difficulty)
         # if not the final difficulty, unlock the next difficulty
         if self.level.difficulty != 2:
             level_to_unlock = ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty+1)]
@@ -688,26 +519,6 @@ class TransitionScreen(Screen):
         
         self.game_summary = ""
         
-        # self.stars = [
-        #     Button(
-        #     text="", 
-        #     background_normal="assets/star.png", 
-        #     # background_down="assets/help_down.png",
-        #     size=((metrics.dp(70), metrics.dp(70))), 
-        #     pos=(0.4*w, 0.3*h)),
-        #     Button(
-        #     text="", 
-        #     background_normal="assets/star.png", 
-        #     # background_down="assets/help_down.png",
-        #     size=((metrics.dp(70), metrics.dp(70))), 
-        #     pos=(0.5*w, 0.3*h)),
-        #     Button(
-        #     text="", 
-        #     background_normal="assets/star.png", 
-        #     # background_down="assets/help_down.png",
-        #     size=((metrics.dp(70), metrics.dp(70))), 
-        #     pos=(0.6*w, 0.3*h))
-        # ]
         self.stars = [
             CRectangle(
                 cpos=(0.4*w, 0.3*h),
@@ -728,39 +539,17 @@ class TransitionScreen(Screen):
         for star in self.stars:
             self.canvas.add(star)
 
-        # Buttons for entering learning/game main screen
-        self.lmode_button = Button(
-            text='Go to Learning Mode', 
-            font_name="AtlantisInternational", 
-            font_size=font_sz/2, 
-            size=(0.35*w, 0.15*h), 
-            pos=(0.6*w, 0.05*h),
-            background_normal = 'assets/button.png',
-            background_down = 'assets/button_down.png')
-        self.lmode_button.bind(on_release= lambda x: self.switch_to('lmode_main'))
-        # self.add_widget(self.lmode_button)
-
-        self.gmode_button = Button(
-            text='Return to Game Mode', 
-            font_size=font_sz/2, 
-            font_name="AtlantisInternational", 
-            size=(0.35*w, 0.15*h), 
-            pos=(0.05*w, 0.05*h),
-            background_normal = 'assets/button.png',
-            background_down = 'assets/button_down.png')
-        self.gmode_button.bind(on_release= lambda x: self.switch_to('gmode_main'))
+        self.gmode_button = ReturnToButton('Return to Game Mode')
+        self.gmode_button.bind(on_release=lambda x: self.switch_to('gmode_main'))
         self.add_widget(self.gmode_button)
 
     def on_layout(self, win_size):
+        self.gmode_button.on_layout(win_size)
         w, h = win_size
         self.title.set_cpos((w/2, 3*h/4))
         self.stats.set_cpos((w/2, h/2))
         for i,star in enumerate(self.stars):
             star.pos = ((0.4+0.1*i)*w, 0.3*h)
-        # self.lmode_button.size = (0.35*w, 0.15*h)
-        # self.lmode_button.pos = (0.6*w, 0.05*h)
-        self.gmode_button.size = (0.35*w, 0.15*h)
-        self.gmode_button.pos = (0.05*w, 0.05*h)
     
     def on_enter(self):
         print('transition')
@@ -769,8 +558,6 @@ class TransitionScreen(Screen):
         for i,star in enumerate(self.stars):
             if star in self.canvas.children:
                 self.canvas.remove(star)
-        print(game_summary)
-        # self.game_summary = game_summary
         count = game_summary['correct']
         # hint = game_summary['hint']
         # skip = game_summary['skip']
@@ -778,9 +565,7 @@ class TransitionScreen(Screen):
         self.stats.set_text(summary_text)
         for i in range(min(count,3)):
             self.canvas.add(self.stars[i])
-    
-    # def on_update(self):
-        # print(self.stats.label.text)
+
 
 class TimerDisplay(InstructionGroup):
     def __init__(self):
@@ -797,8 +582,13 @@ class TimerDisplay(InstructionGroup):
         self.add(self.color)
         self.add(self.bar)
         
+        self.remaining_time = CLabelRect(cpos=(self.end_x + 50, self.start_y),
+                                text=str(int(self.duration)),
+                                font_size=(self.end_y-self.start_y)/2,
+                                font_name="AtlantisInternational")
+        self.add(self.remaining_time)
+        
         # Vertical borders
-        # self.add(Color(0, .5, .5/1.5))
         self.border_left = Line(width=2)
         self.border_mid = Line(width=2)
         self.border_right = Line(width=2)
@@ -807,53 +597,38 @@ class TimerDisplay(InstructionGroup):
         self.add(self.border_mid)
         
         # Horizontal borders
-        # self.add(Color(0.1, 1, 1/1.5))
         self.border_bot = Line(width=2)
         self.border_top = Line(width=2)
         self.add(self.border_bot)
         self.add(self.border_top)
         
         self.on_layout(Window.size)
-
-        
-        # self.nowbar = Line(width=2)
-        # self.add(Color(0, 0.7, 0.74/1.5))
-        # self.add(self.nowbar)
-        # self.gems = []
-        # self.added = False
-
-    # def getXPos(self, time):
-    #     # [start_x   .. <- |  end_x]
-    #     # throughout duration
-    #     t = self.end_x - (time / self.duration) * (self.end_x - self.start_x)
-    #     return t
     
-    def reset(self):
-        # self.duration = duration
+    def reset(self, duration=30.):
+        self.duration = duration
         self.color.rgb = (0,1,0)
         self.bar.size = (self.end_x-self.start_x, self.end_y-self.start_y)
+        self.remaining_time.set_text(str(int(self.duration)))
 
     def get_width(self, time):
         t = (self.end_x - self.start_x) * (1 - time / self.duration)
         return t
 
-    # def addNote(self, time,):
-    #     newgem = Gem(self.getXPos(time))
-    #     self.add(newgem)
-    #     self.gems.append(newgem)
-
     def on_update(self, time_elapsed):
         if time_elapsed > self.duration:
             return 'end of game'
-            # time_elapsed %= self.duration
 
         if time_elapsed >=0:
             # self.nowbar.points = [(self.getXPos(time_elapsed), self.start_y), (self.getXPos(time_elapsed), self.end_y),]
             # self.bar.pos = (self.getXPos(time_elapsed), self.start_y)
             self.bar.size = (self.get_width(time_elapsed), self.end_y-self.start_y)
+            # update remaining time
+            self.remaining_time.set_text(str(int(self.duration - time_elapsed)))
         
-        # update bar timer color
-        self.color.rgb = (min(time_elapsed/self.duration*2,1),min(1,(1-time_elapsed/self.duration)*2),0)
+            # update bar timer color
+            self.color.rgb = (min(time_elapsed/self.duration*2,1),min(1,(1-time_elapsed/self.duration)*2),0)
+        
+        
         
 
     def on_layout(self, win_size):
@@ -876,3 +651,4 @@ class TimerDisplay(InstructionGroup):
         self.border_right.points=[(self.end_x, self.start_y), (self.end_x, self.end_y)]
         self.border_bot.points = [(self.start_x, self.start_y), (self.end_x, self.start_y)]
         self.border_top.points = [(self.start_x, self.end_y,), (self.end_x, self.end_y)]
+        self.remaining_time.set_cpos((self.end_x + 50, self.start_y))
