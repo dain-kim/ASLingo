@@ -24,6 +24,7 @@ class VideoHandler():
         self.framecount = 0
         self.prediction = ''
         self.score = ''
+        self.pred_thresh = 0.3
     
     def load_source(self, vid_src):
         self.cap.release()
@@ -68,7 +69,7 @@ class VideoHandler():
                 callback(buf)
             return buf
     
-    def get_next_frame(self, pred_thresh=0.3):
+    def get_next_frame(self):
         '''
         Reads the next frame from the webcam and makes a prediction when applicable.
         Returns:
@@ -93,7 +94,7 @@ class VideoHandler():
             self.score = ''
         image = cv2.flip(image, 1)
         if self.prediction:
-            cv2.putText(image, prediction + '  ' + score, (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
+            cv2.putText(image, self.prediction + '  ' + self.score, (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
 
         return image, self.prediction, self.score
 
@@ -103,14 +104,12 @@ class VideoHandler():
         data = self.processor.process(df)
         pred_prob = model.predict_proba([data])[0]
         pred_class = list(pred_prob).index(max(pred_prob))
-        if max(pred_prob) < pred_thresh:
-            # print('PREDICTED: NEUTRAL', max(pred_prob))
+        if max(pred_prob) < self.pred_thresh:
             self.prediction = ''
             self.score = ''
         else:
             self.prediction = pred_class_to_letter(pred_class)[0]
             self.score = str(round(max(pred_prob),2))
-            # print('PREDICTED:', prediction, score)
     
     def get_frame(self):
         if self.cap.isOpened():

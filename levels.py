@@ -1,4 +1,5 @@
 import numpy as np
+import random
 from game_words import GAME_WORDS
 set_idx_to_letters = {0: 'ABCDEFG', 1: 'HIJKLMN', 2: 'OPQRST', 3: 'UVWXYZ'}
 
@@ -12,27 +13,33 @@ class Level():
         self.difficulty = difficulty
         self.unlocked = unlocked
         self.completed = False
+        self.reset()
+
+    def reset(self):
         self._cur_letter_idx = 0
         self.attempted = set()
-        
-        if self.mode == 'lmode':
-            self.target = set_idx_to_letters[self.letter_set][0]
-            if self.difficulty == 2:
-                self.target = self.get_next_target()
-        elif self.mode == 'gmode':
-            self.target = np.random.choice(GAME_WORDS[self.letter_set][self.difficulty])
         self.feedback = ""
         self._frame_counter = 0
         self._feedback_counter = 0
+        
         if self.mode == 'lmode':
+            if self.difficulty == 2:
+                self._cur_letter_idx = np.random.choice(range(len(set_idx_to_letters[self.letter_set])))
+                self.target = set_idx_to_letters[self.letter_set][self._cur_letter_idx]
+            else:
+                self.target = set_idx_to_letters[self.letter_set][0]
             self.vid_src = 'guide_videos/{}.mp4'.format(self.target)
-        else:
+            
+        elif self.mode == 'gmode':
+            self.target = np.random.choice(GAME_WORDS[self.letter_set][self.difficulty])
             self.vid_src = 'guide_videos/{}.mp4'.format(self.target[self._cur_letter_idx])
     
     def get_id(self):
         return (self.mode, self.letter_set, self.difficulty)
     
     def set_target(self, target):
+        if target == 'level complete':
+            return target
         if self.target != target:
             self.target = target
             self._frame_counter = 0
@@ -40,7 +47,6 @@ class Level():
                 self.vid_src = 'guide_videos/{}.mp4'.format(self.target)
             elif self.mode == 'gmode':
                 self._cur_letter_idx = 0
-                print('updated vid src to', self.target[self._cur_letter_idx])
                 self.vid_src = 'guide_videos/{}.mp4'.format(self.target[self._cur_letter_idx])
             return self.target
     
@@ -48,23 +54,22 @@ class Level():
         if self.mode == 'lmode':
             if self.difficulty in [0,1]:
                 letters = set_idx_to_letters[self.letter_set]
-                # return chr((ord(self.target)+1 - ord(letters[0])) % len(letters) + ord(letters[0]))
                 return letters[self._cur_letter_idx%len(letters)]
-            # TODO fix shuffle mode behavior to keep track of guessed letters
             else:
-                # letters = [l for l in set_idx_to_letters[self.letter_set] if l != self.target]
-                letters = [l for l in set_idx_to_letters[self.letter_set] if l not in self.attempted]
+                letters = list(set(set_idx_to_letters[self.letter_set]) - self.attempted)
                 return np.random.choice(letters)
         elif self.mode == 'gmode':
             word_bank = GAME_WORDS[self.letter_set][self.difficulty]
+            if len(self.attempted) == len(word_bank):
+                return "level complete"
             # TODO know words that are already guessed
-            word_bank.remove(self.target)
-            return np.random.choice(word_bank)
+            draw_from = list(set(word_bank)-self.attempted)
+            if len(draw_from) == 0:
+                return "level complete"
+            return np.random.choice(draw_from)
             
     
-    def on_update(self, frame_info):
-        frame, pred, score = frame_info
-
+    def on_update(self, pred, score):
         # Update feedback
         if 0 < self._feedback_counter:
             self.feedback = 'Nice job!'
@@ -74,7 +79,6 @@ class Level():
             self.feedback = ""
 
         # Update score
-        # TODO: more robust way of parsing prediction
         if self.mode == 'lmode':
             if pred.replace('LETTER-','') == self.target:
                 self._frame_counter += 1
@@ -84,7 +88,6 @@ class Level():
                 self._frame_counter = 0
                 self._feedback_counter = 1
                 self._cur_letter_idx += 1
-                # if len(set_idx_to_letters[self.letter_set]) == self._cur_letter_idx:
                 if len(self.attempted) == len(set_idx_to_letters[self.letter_set]):
                     print('congrats! You learned all the letters in this set')
                     self.completed = True
@@ -107,8 +110,6 @@ class Level():
                     self._cur_letter_idx = 0
                     return self.set_target(self.get_next_target())
                 else:
-                    print('updated vid src to', self.target[self._cur_letter_idx])
                     self.vid_src = 'guide_videos/{}.mp4'.format(self.target[self._cur_letter_idx])
                     return self.target[self._cur_letter_idx]
-                # TODO game finish condition
 
