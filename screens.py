@@ -13,12 +13,18 @@ import string
 import numpy as np
 from levels import Level
 import time
-from config import ModeButton, LevelButton, ReturnToButton, HelpButton
+from config import ModeButton, LevelButton, ReturnToButton, HelpButton, VideoDisplay
 
 font_sz = metrics.dp(50)
 button_sz = metrics.dp(100)
 set_idx_to_letters = {0: 'ABCDEFG', 1: 'HIJKLMN', 2: 'OPQRST', 3: 'UVWXYZ'}
 ALL_LEVELS = {}
+
+def get_level(level_id):
+    return ALL_LEVELS[level_id]['level']
+
+def get_button(level_id):
+    return ALL_LEVELS[level_id]['button']
 
 def gen_button_text(mode, letter_set, difficulty):
     '''helper function for the MainScreen to get the correct level button text'''
@@ -142,15 +148,10 @@ class MainScreen(Screen):
         self.enter_level(level)
     
     def call_help(self, button):
-        print('help!')
         if button.active:
             self.canvas.remove(button.overlay)
         else:
             self.canvas.add(button.overlay)
-        
-
-    def on_key_down(self, keycode, modifiers):
-        print(keycode[1])
 
     def on_update(self):
         # Update screen text
@@ -180,15 +181,12 @@ class LearningScreen(Screen):
     '''
     def __init__(self, webcam, **kwargs):
         super(LearningScreen, self).__init__(**kwargs)
-        self.webcam = webcam
         self.level = Level(mode='lmode',letter_set=0,difficulty=0)
-        self.guide_video = cv2.VideoCapture(self.level.vid_src)
 
         # Level text
         self.info = topleft_label(font_size=font_sz, font_name="assets/AtlantisInternational")
         self.info.text = set_idx_to_letters[self.level.letter_set] + '\n'
         self.info.text += "Use the keyboard to see a different letter\n"
-        # self.info.text += "Letter: {}\n".format(self.level.target)
         self.info.text += "Letter: "
         self.add_widget(self.info)
         
@@ -200,19 +198,15 @@ class LearningScreen(Screen):
         # Guide video and webcam displays
         w, h = Window.size
         # TODO smarter way of scaling webcam display to preserve 16:9 ratio
+        self.webcam = webcam
         self.webcam_display = Rectangle(pos=(0.5*w, 0.3*h), size=(0.5*w,0.375*h))
+        self.guide_video = VideoDisplay(self.level.vid_src, 'left')
         self.canvas.add(self.webcam_display)
-        self.guide_video_display = Rectangle(pos=(0, 0.3*h), size=(0.5*w,0.375*h))
-        self.canvas.add(self.guide_video_display)
+        self.canvas.add(self.guide_video)
     
-    def on_exit(self):
-        print('EXITING LEARNING SCREEN')
-
     def on_key_down(self, keycode, modifiers):
-        print(keycode[1])
         if keycode[1] == '1': #TODO temp
             print('manual unlock')
-            ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty)]['button'].background_normal = 'assets/button{}_down.png'.format(str(self.level.letter_set))
             self.unlock_next_levels()
             self.switch_to('lmode_main')
         if keycode[1] in string.ascii_lowercase:
@@ -220,19 +214,11 @@ class LearningScreen(Screen):
             # If H+ is pressed in set A-G, what happens?
             if keycode[1].upper() in set_idx_to_letters[self.level.letter_set]:
                 if self.level.set_target(keycode[1].upper()):
-                    self.guide_video = cv2.VideoCapture(self.level.vid_src)
+                    self.guide_video.load_source(self.level.vid_src)
 
     def on_update(self):
         # Update guide video display
-        if self.guide_video:
-            success, frame = self.guide_video.read()
-            if success:
-                buf1 = cv2.flip(frame, 0)
-                buf1 = cv2.flip(buf1, 1)
-                buf = buf1.tostring()
-                texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
-                texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
-                self.guide_video_display.texture = texture
+        self.guide_video.on_update()
 
         # Update webcam display
         frame_info = self.webcam.get_next_frame()
@@ -248,13 +234,10 @@ class LearningScreen(Screen):
             level_update = self.level.on_update(frame_info)
             #TODO better way of doing this
             if level_update == "level complete":
-                ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty)]['button'].background_normal = 'assets/button{}_down.png'.format(str(self.level.letter_set))
                 self.unlock_next_levels()
                 self.switch_to('lmode_main')
             elif level_update:
-                if self.guide_video:
-                    self.guide_video.release()
-                self.guide_video = cv2.VideoCapture(self.level.vid_src)
+                self.guide_video.load_source(self.level.vid_src) # TODO maybe not necessary?
         
         # Update screen text
         self.info.text = set_idx_to_letters[self.level.letter_set] + '\n'
@@ -266,55 +249,46 @@ class LearningScreen(Screen):
         resize_topleft_label(self.info)
         w, h = win_size
         if self.level.difficulty == 0:
-            if self.guide_video_display not in self.canvas.children:
-                self.canvas.add(self.guide_video_display)
             self.uncenter_webcam()
         else:
-            if self.guide_video_display in self.canvas.children:
-                print('removing guide video display')
-                self.canvas.remove(self.guide_video_display)
             self.center_webcam()
         self.webcam_display.size = (0.5*w,0.375*h)
-        self.guide_video_display.pos = (0, 0.3*h)
-        self.guide_video_display.size = (0.5*w,0.375*h)
+        self.guide_video.on_layout(win_size)
         self.intro_button.on_layout(win_size)
+    
+    def display_video(self, position):
+        self.guide_video.move_to(position)
+        if self.guide_video not in self.canvas.children:
+            self.canvas.add(self.guide_video)
+    
+    def hide_video(self):
+        if self.guide_video in self.canvas.children:
+            self.canvas.remove(self.guide_video)
 
     def set_level(self, level):
         self.level = level
+        self.guide_video.load_source(self.level.vid_src)
+        
         if self.level.difficulty == 0:
-            if self.guide_video_display not in self.canvas.children:
-                self.canvas.add(self.guide_video_display)
+            self.display_video('left')
             self.uncenter_webcam()
-            if self.guide_video:
-                self.guide_video.release()
-            self.guide_video = cv2.VideoCapture(self.level.vid_src)
         else:
-            if self.guide_video:
-                self.guide_video.release()
-                self.guide_video = None
-            if self.guide_video_display in self.canvas.children:
-                self.canvas.remove(self.guide_video_display)
+            self.hide_video()
             self.center_webcam()
     
     def unlock_next_levels(self):
+        # Fill in the button icon to show completion
+        level_button = get_button(self.level.get_id())
+        level_button.background_normal = 'assets/button{}_down.png'.format(str(self.level.letter_set))
+
         # if not the final difficulty, unlock the next difficulty
         if self.level.difficulty != 2:
-            level_to_unlock = ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty+1)]
-            level_to_unlock['level'].unlocked = True
-            level_to_unlock['button'].disabled = False
+            next_id = (self.level.mode, self.level.letter_set, self.level.difficulty+1)
         # if final difficulty, unlock corresponding game level
         else:
-            level_to_unlock = ALL_LEVELS[('gmode', self.level.letter_set, 0)]
-            level_to_unlock['level'].unlocked = True
-            level_to_unlock['button'].disabled = False
-            # also unlock next set of letters (if any)
-            if self.level.letter_set != 3:
-                level_to_unlock = ALL_LEVELS[(self.level.mode, self.level.letter_set+1, 0)]
-                level_to_unlock['level'].unlocked = True
-                level_to_unlock['button'].disabled = False
-        
-        # print('moving onto the next level...')
-        # self.set_level(level_to_unlock['level'])
+            next_id = ('gmode', self.level.letter_set, 0)
+        get_level(next_id).unlocked = True
+        get_button(next_id).disabled = False
 
     def center_webcam(self):
         w,h = Window.size
@@ -332,13 +306,11 @@ class GameScreen(Screen):
         # transition function for sending game summary
         self.send_summary = send_summary
         self.level = Level(mode='gmode',letter_set=0,difficulty=0)
-        self.guide_video = None
 
         self.info = topleft_label(font_size=font_sz, font_name="assets/AtlantisInternational")
         self.info.text = set_idx_to_letters[self.level.letter_set] + '\n'
-        self.info.text += "Spell out the following word\n"
+        self.info.text += "Spell out the following word: {}\n".format(self.level.target)
         self.info.text += "Press spacebar to skip, h to see hint\n"
-        self.info.text += "Word: {}\n".format(self.level.target)
         self.info.text += "Spelled so far: {}\n".format(self.level.target[:self.level._cur_letter_idx])
 
         self.add_widget(self.info)
@@ -346,52 +318,40 @@ class GameScreen(Screen):
         self.bartimer = TimerDisplay()
         self.canvas.add(self.bartimer)
         
-        # # Hint popup
-        # self.popup = HelpPopup()
-        # self.add_widget(self.popup)
-
         self.gmode_button = ReturnToButton('Return to Game Mode')
         self.gmode_button.bind(on_release=lambda x: self.switch_to('gmode_main'))
         self.add_widget(self.gmode_button)
 
         w, h = Window.size
         # TODO smarter way of scaling webcam display to preserve 16:9 ratio
-        self.webcam_display = Rectangle(pos=(0.3*w, 0.3*h), size=(0.4*w,0.3*h))
+        self.webcam_display = Rectangle(pos=(0.25*w, 0.3*h), size=(0.5*w,0.375*h))
         self.canvas.add(self.webcam_display)
-        self.guide_video_display = Rectangle(pos=(0.3*w, 0.3*h), size=(0.4*w, 0.3*h))
-        # self.canvas.add(self.guide_video_display)
+        self.guide_video = VideoDisplay(self.level.vid_src, 'left')
+    
+    def display_video(self, position):
+        self.guide_video.move_to(position)
+        if self.guide_video not in self.canvas.children:
+            self.canvas.add(self.guide_video)
+    
+    def hide_video(self):
+        if self.guide_video in self.canvas.children:
+            self.canvas.remove(self.guide_video)
 
     def on_enter(self):
         # reset timer
         self.start_time = time.time() + 3
         duration = 30. + 15 * (self.level.difficulty)
         self.bartimer.reset(duration)
-        if self.guide_video:
-            self.guide_video.release()
-            self.guide_video = None
-        if self.guide_video_display in self.canvas.children:
-            self.canvas.remove(self.guide_video_display)
-    
-    def on_exit(self):
-        print('EXITING GAME SCREEN')
+        
+        self.guide_video.load_source(self.level.vid_src)
+        self.hide_video()
 
     def on_key_down(self, keycode, modifiers):
-        print(keycode[1])
         if keycode[1] == 'spacebar':
             # get new target word
             self.level.set_target(self.level.get_next_target())
         if keycode[1] == 'h':
-            if self.guide_video:
-                self.guide_video.release()
-            let = self.level.target[self.level._cur_letter_idx]
-            self.guide_video = cv2.VideoCapture('guide_videos/{}.mp4'.format(let))
-            self.canvas.add(self.guide_video_display)
-            # self.popup.open(self.level.target[self.level._cur_letter_idx])
-            # TODO use self.level.vid_src
-    
-    # def on_key_up(self, keycode):
-    #     if keycode[1] == 'h':
-    #         self.popup.dismiss()
+            self.display_video('center')
 
     def on_update(self):
         # Update time
@@ -403,29 +363,17 @@ class GameScreen(Screen):
             # TODO if hint used, score is docked
             # TODO if word skipped, score is docked
             # TODO calculate and save level score
-            # ALL_LEVELS[(self.level.mode, self.level.letter_set, self.letter.difficulty)]['']
             self.send_summary({'correct': level_total})
             if level_total > 0:
-                print('UNLOCKING')
-                ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty)]['button'].background_normal = 'assets/button{}_down.png'.format(str(self.level.letter_set))
                 self.unlock_next_levels()
             self.switch_to('transition')
             return
         
         # Update guide video display
-        if self.guide_video:
-            success, frame = self.guide_video.read()
-            if success:
-                buf1 = cv2.flip(frame, 0)
-                buf1 = cv2.flip(buf1, 1)
-                buf = buf1.tostring()
-                texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
-                texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
-                self.guide_video_display.texture = texture
-            else:
-                self.guide_video.release()
-                self.guide_video = None
-                self.canvas.remove(self.guide_video_display)
+        if self.guide_video in self.canvas.children:
+            video_update = self.guide_video.on_update()
+            if not video_update:
+                self.hide_video()
 
         # Update webcam display
         frame_info = self.webcam.get_next_frame()
@@ -438,16 +386,15 @@ class GameScreen(Screen):
             self.webcam_display.texture = texture
                 
             # Update level
-            # if self.level.on_update(frame_info):
-            #     self.guide_video = cv2.VideoCapture(self.level.vid_src)
             level_update = self.level.on_update(frame_info)
+            if level_update:
+                self.guide_video.load_source(self.level.vid_src)
             
         
         # Update screen text
         self.info.text = set_idx_to_letters[self.level.letter_set] + '\n'
-        self.info.text += "Spell out the following word\n"
+        self.info.text += "Spell out the following word: {}\n".format(self.level.target)
         self.info.text += "Press spacebar to skip, h to see hint\n"
-        self.info.text += "Word: {}\n".format(self.level.target)
         self.info.text += "Spelled so far: {}\n".format(self.level.target[:self.level._cur_letter_idx])
         self.info.text += self.level.feedback
 
@@ -456,22 +403,25 @@ class GameScreen(Screen):
         self.gmode_button.on_layout(win_size)
         
         w, h = win_size
-        self.webcam_display.pos = (0.3*w, 0.3*h)
-        self.webcam_display.size = (0.4*w,0.3*h)
-        self.guide_video_display.pos = (0.3*w, 0.3*h)
-        self.guide_video_display.size = (0.4*w,0.3*h)
+        self.webcam_display.pos = (0.25*w, 0.3*h)
+        self.webcam_display.size = (0.5*w,0.375*h)
+        self.guide_video.on_layout(win_size)
         self.bartimer.on_layout(win_size)
-        # self.popup.redraw()
 
     def set_level(self, level):
         self.level = level
     
     def unlock_next_levels(self):
+        # Fill in the button icon to show completion
+        level_button = get_button(self.level.get_id())
+        level_button.background_normal = 'assets/button{}_down.png'.format(str(self.level.letter_set))
+        
         # if not the final difficulty, unlock the next difficulty
         if self.level.difficulty != 2:
             level_to_unlock = ALL_LEVELS[(self.level.mode, self.level.letter_set, self.level.difficulty+1)]
             level_to_unlock['level'].unlocked = True
             level_to_unlock['button'].disabled = False
+
 
 class TransitionScreen(Screen):
     def __init__(self, unlock_next, **kwargs):

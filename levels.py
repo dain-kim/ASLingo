@@ -26,6 +26,11 @@ class Level():
         self._feedback_counter = 0
         if self.mode == 'lmode':
             self.vid_src = 'guide_videos/{}.mp4'.format(self.target)
+        else:
+            self.vid_src = 'guide_videos/{}.mp4'.format(self.target[self._cur_letter_idx])
+    
+    def get_id(self):
+        return (self.mode, self.letter_set, self.difficulty)
     
     def set_target(self, target):
         if self.target != target:
@@ -33,10 +38,11 @@ class Level():
             self._frame_counter = 0
             if self.mode == 'lmode':
                 self.vid_src = 'guide_videos/{}.mp4'.format(self.target)
-            if self.mode == 'gmode':
+            elif self.mode == 'gmode':
                 self._cur_letter_idx = 0
-            return True
-        return False
+                print('updated vid src to', self.target[self._cur_letter_idx])
+                self.vid_src = 'guide_videos/{}.mp4'.format(self.target[self._cur_letter_idx])
+            return self.target
     
     def get_next_target(self):
         if self.mode == 'lmode':
@@ -100,5 +106,9 @@ class Level():
                     print('FINISHED WORD')
                     self._cur_letter_idx = 0
                     return self.set_target(self.get_next_target())
+                else:
+                    print('updated vid src to', self.target[self._cur_letter_idx])
+                    self.vid_src = 'guide_videos/{}.mp4'.format(self.target[self._cur_letter_idx])
+                    return self.target[self._cur_letter_idx]
                 # TODO game finish condition
 
