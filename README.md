@@ -1,10 +1,6 @@
 # ASLingo
 
-Term project for 6.835 Intelligent Multimodal Interaction.
-
-[hand landmarks indices](https://google.github.io/mediapipe/images/mobile/hand_landmarks.png)
-
-[upper body landmarks indices](https://google.github.io/mediapipe/images/mobile/pose_tracking_upper_body_landmarks.png)
+ASLingo is a visual and interactive language learning tool for American Sign Language. Learn the letters of the alphabet in ASL by following the guide video in the learning mode. Then, once you're ready, test yourself in the game mode by spelling out as many words as possible before the timer runs out.
 
 ## Table of Contents
 
@@ -15,22 +11,28 @@ Term project for 6.835 Intelligent Multimodal Interaction.
 - App
 - Learning Mode & Game Mode
 
-
-
-### By File:
-
-- [`data_collection.py`](#data-collection)
-- [`utils.py`]
-
 ## How to Run
+
+Environment setup:
 
 ```
 conda create -n aslingo python=3.8
 conda activate aslingo
 pip install -r requirements.txt
+python check_install.py
 ```
 
+Running the main app:
 
+```
+python app.py
+```
+
+Most levels are locked in the beginning. To override level locking and see all levels, run:
+
+```
+python app.py -godmode
+```
 
 ## Data Collection and Processing
 
@@ -51,6 +53,12 @@ Mediapipe returns the data at each frame as a SolutionOutputs object, which need
 Data source: [ASL SignBank](https://aslsignbank.haskins.yale.edu), https://www.youtube.com/watch?v=tkMg8g8vVUo 
 
 
+
+[hand landmarks indices](https://google.github.io/mediapipe/images/mobile/hand_landmarks.png)
+
+[upper body landmarks indices](https://google.github.io/mediapipe/images/mobile/pose_tracking_upper_body_landmarks.png)
+
+## 
 
 ## Recognition Model
 
