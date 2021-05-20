@@ -1,10 +1,10 @@
 import sys, os
-sys.path.insert(0, os.path.abspath('..'))
+# sys.path.insert(0, os.path.abspath('..'))
 
 import importlib
+from importlib.metadata import version
 import platform
 import os.path
-import time
 
 PY_TGT_VERSION = (3,8)
 
@@ -29,12 +29,14 @@ def check(cond, txt):
     else:
         error(txt + '[FAILURE]')
 
-def check_module(mod, test_func=None):
+def check_module(mod, version_check=None):
     print('\nChecking', mod)
     try:
         m = importlib.import_module(mod)
-        if test_func:
-            test_func(m)
+        if version_check:
+            if mod == 'sklearn':
+                mod = 'scikit-learn'
+            assert version(mod) == version_check, f"{mod} version mismatch (should be {version_check}, but is {version(mod)})"
         print(m, '[OK]')
     except Exception as e:
         error(str(e) + ' [FAILURE]')
@@ -85,14 +87,14 @@ def check_kivy_window():
 # Check python version
 check(sys.version_info[:2] == PY_TGT_VERSION, "Python Version == %d.%d" % PY_TGT_VERSION)
 
-# if platform.system() == 'Windows':
-#     check(platform.architecture()[0] == '64bit', "Python Windows is 64bit")
-# elif platform.system() == 'Darwin':
-#     check(platform.architecture()[0] == '64bit', "Python Mac is 64bit")
-
-check_module('numpy', lambda m: m.zeros(4))
-check_module('mediapipe')
-check_module('kivy')
+check_module('numpy')
+check_module('cv2')
+check_module('mediapipe', "0.8.3.1")
+check_module('pandas')
+check_module('jupyter')
+check_module('matplotlib')
+check_module('sklearn', "0.24.1")
+check_module('kivy', "2.0.0")
 check_kivy_window()
 
 print_errors()

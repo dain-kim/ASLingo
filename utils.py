@@ -5,7 +5,7 @@ import mediapipe as mp
 import string
 from sklearn import preprocessing
 # from SignBankRefIDs import SB_REF_IDS
-from requests_html import HTMLSession
+# from requests_html import HTMLSession
 
 
 mp_drawing = mp.solutions.drawing_utils
@@ -143,7 +143,107 @@ def generate_dataframe(processed):
     df = pd.DataFrame(data=data, columns=columns)
     return df
 
+class StaticSignProcessor():
+    def __init__(self, X_shape=(10,126,1)):
+        self.shape = X_shape
+    
+    def process(self, df):
+        '''
+        Processes the parsed data (DataFrame containing MediaPipe data objects)
+        just the cleanup: cut out head and tail, fill nan, (normalize)
+        '''
+#         # Drop the frames in the beginning and end of the video where no hands are detected
+#         start_idx = (~df['lefthand_0_x'].isna() | ~df['righthand_0_x'].isna()).argmax()
+#         end_idx = len(df) - (df[::-1]['lefthand_0_x'].isna() & df[::-1]['righthand_0_x'].isna()).argmin()
+# #         df = df.iloc[start_idx:end_idx]
+#         # for lda
+# #         df = df.iloc[start_idx:end_idx,1:]
 
+#         # Fill empty values with the previous seen value
+#         df = df.fillna(method='ffill')
+#         df = df.fillna(method='bfill')
+#         df = df.fillna(0.)
+        
+#         # Drop the timeframe and pose data
+#         df = df.iloc[start_idx:end_idx,1:127]
+
+#         if sum(np.isnan(df.to_numpy())) != 0:
+#             print('FAIL: na value found')
+#             print(df)
+
+#         # normalize
+#         data = df.fillna(0).to_numpy()
+#         x = np.linspace(0, len(data.T[0]), self.shape[0], endpoint=False)
+#         norm_data = np.array([np.interp(x, np.arange(len(col)), col) for col in data.T]).T
+#         print(norm_data.shape)
+#         norm_data = np.reshape(norm_data, self.shape)
+#         print(norm_data.shape)
+
+        # normalize x and y positions based on the width of the shoulders and height from shoulders to nose
+#         x1,y1,x2,y2 = df[['pose_11_x','pose_0_y','pose_12_x','pose_12_y']].mean()
+        df_array = df.to_numpy().T  # shape: (202,num_frames)
+#         col_indices = [df.columns.get_loc(col) for col in ('pose_11_x','pose_0_y','pose_12_x','pose_12_y')]
+#         x1,y1,x2,y2 = df_array[col_indices].mean(axis=1)
+
+        for h in ['left','right']:
+            x1,y1,x2,y2 = df.filter(regex=h).filter(regex='_x').min().min(),df.filter(regex=h).filter(regex='_y').min().min(),df.filter(regex=h).filter(regex='_x').max().max(),df.filter(regex=h).filter(regex='_y').max().max()
+            x_cols = [df.columns.get_loc(col) for col in df.filter(regex=h).filter(regex='_x').columns]
+            y_cols = [df.columns.get_loc(col) for col in df.filter(regex=h).filter(regex='_y').columns]
+            df_array[x_cols] = (df_array[x_cols]-min(x1,x2))/(max(x1,x2)-min(x1,x2)+0.000001)
+            df_array[y_cols] = (df_array[y_cols]-min(y1,y2))/(max(y1,y2)-min(y1,y2)+0.000001)
+
+# #         def norm_pts(p):
+# #             px = (p[0]-min(x1,x2))/(max(x1,x2)-min(x1,x2)+0.000001)
+# #             py = (p[1]-min(y1,y2))/(max(y1,y2)-min(y1,y2)+0.000001)
+# #             return (px,py)
+#         x_cols = [df.columns.get_loc(col) for col in df.filter(regex='_x').columns]
+#         y_cols = [df.columns.get_loc(col) for col in df.filter(regex='_y').columns]
+#         df_array[x_cols] = (df_array[x_cols]-min(x1,x2))/(max(x1,x2)-min(x1,x2)+0.000001)
+#         df_array[y_cols] = (df_array[y_cols]-min(y1,y2))/(max(y1,y2)-min(y1,y2)+0.000001)
+# #         df_x = (df.filter(regex='_x')-min(x1,x2))/(max(x1,x2)-min(x1,x2)+0.000001)
+# #         df_y = (df.filter(regex='_y')-min(y1,y2))/(max(y1,y2)-min(y1,y2)+0.000001)
+        norm_df = pd.DataFrame(data=df_array.T, columns=df.columns)
+    
+        # Drop the frames in the beginning and end of the video where no hands are detected
+        # Drop the timeframe and pose data
+        start_idx = (~norm_df['lefthand_0_x'].isna() | ~norm_df['righthand_0_x'].isna()).argmax()
+        end_idx = len(norm_df) - (norm_df[::-1]['lefthand_0_x'].isna() & norm_df[::-1]['righthand_0_x'].isna()).argmin()
+        
+        norm_df = norm_df.iloc[start_idx:end_idx,1:127]
+
+        # Fill empty values with the previous seen value
+        norm_df = norm_df.fillna(method='ffill').fillna(method='bfill').fillna(0.)
+        
+        # For classifiers, just return the mean of each column
+        return norm_df.mean().to_numpy()
+
+        # for now, just choose 10 frames from the middle
+#         data = df.iloc[len(df)//3:len(df)//3+10].mean().to_numpy()
+#         if sum(np.isnan(data)) != 0:
+#             print(sum(np.isnan(data)))
+#         norm_data = np.reshape(data, self.shape)
+#         assert data.shape == self.shape
+#         return data
+
+
+    def flip_hands(self, df_array):
+        assert len(df_array) == 126
+        return np.concatenate((df_array[len(df_array)//2:],df_array[:len(df_array)//2]))
+    
+    def generate_more_data(self, df_array, n=10, std=0.1):
+        '''
+        Generate more data from a single sample by adding noise
+        '''
+        samples = []
+        
+        for i in range(n):
+            noise = np.random.normal(0, std, df_array.shape)
+            # randomly select up to 5 joints to perturb
+            perturb_indices = np.random.choice(len(df_array.T), np.random.choice(5), replace=False)
+            df_array.T[perturb_indices] = df_array.T[perturb_indices] + np.random.normal(0, std, df_array.T[perturb_indices].shape)
+            samples.append(df_array + noise)
+
+        return samples
 
 
 sampled_words = ['LETTER-'+let for let in string.ascii_uppercase]
@@ -161,10 +261,10 @@ def mediapipe_idx_parser(idx, mode='hand'):
     elif mode == 'pose':
         return str(mp_pose.PoseLandmark(idx)).split('.')[-1]
 
-BASE_URL = "https://aslsignbank.haskins.yale.edu"
-VIDEO_URL = BASE_URL + "/dictionary/protected_media/glossvideo/ASL/"
-AJAX_URL = BASE_URL + "/dictionary/ajax/glossrow/"
-session = HTMLSession()
+# BASE_URL = "https://aslsignbank.haskins.yale.edu"
+# VIDEO_URL = BASE_URL + "/dictionary/protected_media/glossvideo/ASL/"
+# AJAX_URL = BASE_URL + "/dictionary/ajax/glossrow/"
+# session = HTMLSession()
 
 # deprecated
 def request_video_info(ref_id):
