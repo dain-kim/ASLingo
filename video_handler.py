@@ -22,9 +22,10 @@ class VideoHandler():
         self.hand_results = []
         self.pose_results = []
         self.framecount = 0
-        self.prediction = ''
+        self.prediction = 'Neutral'
         self.score = ''
-        self.pred_thresh = 0.3
+        self.pred_thresh = 0.7
+        # self.colormap = {'No hands detected': (0,0,255), 'Neutral': (255,0,0)}
     
     def load_source(self, vid_src):
         self.cap.release()
@@ -94,7 +95,13 @@ class VideoHandler():
             self.score = ''
         image = cv2.flip(image, 1)
         if self.prediction:
-            cv2.putText(image, self.prediction + '  ' + self.score, (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
+            if self.prediction == 'No hands detected':
+                color = (0,0,255)
+            elif self.prediction == 'Neutral':
+                color = (255,0,0)
+            else:
+                color = (0,150,0)
+            cv2.putText(image, self.prediction + '  ' + self.score, (50,80), cv2.FONT_HERSHEY_SIMPLEX, 2, color, 4)
 
         return image, self.prediction, self.score
 
@@ -105,7 +112,7 @@ class VideoHandler():
         pred_prob = model.predict_proba([data])[0]
         pred_class = list(pred_prob).index(max(pred_prob))
         if max(pred_prob) < self.pred_thresh:
-            self.prediction = ''
+            self.prediction = 'Neutral'
             self.score = ''
         else:
             self.prediction = pred_class_to_letter(pred_class)[0]
@@ -156,7 +163,7 @@ class VideoHandler():
             while self.cap.isOpened():
                 try:
                     image, pred, score = self.get_next_frame()
-                    if pred not in ('','No hands detected'):
+                    if pred not in ('Neutral','No hands detected'):
                         tmp.append(pred.replace('LETTER-',''))
                     if show:
                         cv2.imshow('webcam', image)

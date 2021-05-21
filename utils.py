@@ -24,7 +24,7 @@ pose = mp_pose.Pose(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5)
 
-def mp_process_image(image, num_hands=2):
+def mp_process_image(image, num_hands=1):
     # Flip image around y-axis for correct handedness output.
     image = cv2.flip(image, 1)
     # Convert the BGR image to RGB.

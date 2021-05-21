@@ -8,7 +8,6 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.button import Button
 from kivy.core.window import Window
 from kivy import metrics
-import cv2
 import string
 import numpy as np
 from levels import Level
